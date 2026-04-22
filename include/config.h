@@ -9,14 +9,14 @@ TODO: THE PIN NUMBERS NEED TO BE UPDATED.
 */
 
 // ─── GPIO BUTTONS (XYAB) ──────────────────────────────────────────────────────
-#define BTN_A_PIN       10       
-#define BTN_B_PIN       11
-#define BTN_X_PIN       12
-#define BTN_Y_PIN       13
+#define BTN_A_PIN       36  //check       
+#define BTN_B_PIN       37  //check
+#define BTN_X_PIN       34  //check
+#define BTN_Y_PIN       35  //check
 
 // ─── JOYSTICK (ADC) ───────────────────────────────────────────────────────────
-#define JOYSTICK_X_PIN  26      // ADC channel 0
-#define JOYSTICK_Y_PIN  27      // ADC channel 1
+#define JOYSTICK_X_PIN  40      // ADC channel 0 check
+#define JOYSTICK_Y_PIN  41      // ADC channel 1 check
 #define JOYSTICK_X_CH   0
 #define JOYSTICK_Y_CH   1
 
