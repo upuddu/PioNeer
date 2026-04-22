@@ -22,20 +22,16 @@ TODO: THE PIN NUMBERS NEED TO BE UPDATED.
 
 // ─── TFT LCD (SPI0) ───────────────────────────────────────────────────────────
 #define SPI_PORT        spi0
-#define SPI_CLK_PIN     18
-#define SPI_MOSI_PIN    19
-#define SPI_MISO_PIN    16
-#define SPI_CS_PIN      17
-#define SPI_DC_PIN      20
-#define SPI_RST_PIN     21
-#define SPI_BAUD_HZ     (10 * 1000 * 1000)  // 10 MHz
+#define SPI_CS_PIN      17      // GPIO17_SPI0_CS check
+#define SPI_DC_PIN      21      // GPIO21 (DC/RS) check
+#define SPI_RST_PIN     22      // GPIO22 (RST) check 
+#define SPI_MOSI_PIN    19      // GPIO19_SPI0_TX check
+#define SPI_CLK_PIN     18      // GPIO18_SPI0_SCK check
+#define SPI_MISO_PIN    16      // GPIO16_SPI0_RX check 
+#define SPI_BAUD_HZ     (10 * 1000 * 1000)
 
-// ─── DAC (I2C) ────────────────────────────────────────────────────────────────
-#define I2C_PORT        i2c0
-#define I2C_SDA_PIN     4
-#define I2C_SCL_PIN     5
-#define I2C_BAUD_HZ     (400 * 1000)        // 400 kHz fast mode
-#define DAC_ADDR        0x4C                // AD5693R default I2C address
+// ─── AUDIO (PWM) ─────────────────────────────────────────────────────────────
+#define AUDIO_PIN   38      // GP38 → PWM, through 4-stage filter to speaker check
 
 // ─── NEOPIXEL (PIO) ───────────────────────────────────────────────────────────
 #define NEOPIXEL_PIN    22
