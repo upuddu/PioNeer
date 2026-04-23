@@ -11,10 +11,6 @@ const char *username = "upuddu";
 
 //////////////////////////////////////////////////////////////////////////////
 
-void display_init_pins();
-void display_init_timer();
-void keypad_init_pins();
-void keypad_init_timer();
 void init_wavetable(void);
 void set_freq(int chan, float f);
 void set_waveform(WaveformType wave);
