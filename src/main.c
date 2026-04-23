@@ -9,27 +9,50 @@
 #include "car_racing.h"
 #include "tank_battle.h"
 
+// int main(void) {
+//     stdio_init_all();
+
+//     // ── Init all peripherals ──────────────────────────────────────────────────
+//     buttons_init();
+//     joystick_init();
+//     display_init();
+//     dac_init();
+//     neopixel_init();
+
+//     // ── Game selection loop ───────────────────────────────────────────────────
+//     GameID selected = GAME_LUNAR_LANDER;  // default; replace with menu logic
+
+//     while (true) {
+//         switch (selected) {
+//             case GAME_LUNAR_LANDER: lunar_lander_run(); break;
+//             case GAME_CAR_RACING:   car_racing_run();   break;
+//             case GAME_TANK_BATTLE:  tank_battle_run();  break;
+//             default: break;
+//         }
+//     }
+
+//     return 0;
+// }
+
+#include "pico/stdlib.h"
+#include "spi_display.h"
+
 int main(void) {
     stdio_init_all();
-
-    // ── Init all peripherals ──────────────────────────────────────────────────
-    buttons_init();
-    joystick_init();
     display_init();
-    dac_init();
-    neopixel_init();
 
-    // ── Game selection loop ───────────────────────────────────────────────────
-    GameID selected = GAME_LUNAR_LANDER;  // default; replace with menu logic
+    // Test 1: clear to red
+    display_clear(COLOR_RED);
+    sleep_ms(1000);
 
-    while (true) {
-        switch (selected) {
-            case GAME_LUNAR_LANDER: lunar_lander_run(); break;
-            case GAME_CAR_RACING:   car_racing_run();   break;
-            case GAME_TANK_BATTLE:  tank_battle_run();  break;
-            default: break;
-        }
-    }
+    // Test 2: clear to blue
+    display_clear(COLOR_BLUE);
+    sleep_ms(1000);
 
-    return 0;
+    // Test 3: draw some text
+    display_clear(COLOR_BLACK);
+    display_write_string(10, 10, "PioNeer!", COLOR_WHITE);
+    display_write_string(10, 30, "SPI OK", COLOR_GREEN);
+
+    while (true) {}
 }
