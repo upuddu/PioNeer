@@ -34,9 +34,9 @@ TODO: THE PIN NUMBERS NEED TO BE UPDATED.
 // ─── AUDIO (PWM) ─────────────────────────────────────────────────────────────
 #define AUDIO_PIN 38 // GP38 → PWM, through 4-stage filter to speaker check
 
-// ─── NEOPIXEL (PIO) ───────────────────────────────────────────────────────────
-#define NEOPIXEL_PIN 9    // check
-#define NEOPIXEL_COUNT 10 // check
+// ─── WS2812B LED STRIP ────────────────────────────────────────────────────────
+#define WS2812_PIN 9
+#define WS2812_NUM_LEDS 10
 
 // ─── DISPLAY DIMENSIONS ───────────────────────────────────────────────────────
 #define LCD_WIDTH 480
