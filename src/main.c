@@ -1,23 +1,27 @@
 #include "pico/stdlib.h"
-#include "config.h"
-#include "spi_display.h"
+#include "adc_joystick.h"
+#include <stdio.h>
+#include <math.h>
 
 int main(void) {
     stdio_init_all();
-    display_init();
+    joystick_init();
 
-    // Test 1: clear to red
-    display_clear(COLOR_RED);
-    sleep_ms(1000);
+    while (true) {
+        JoystickReading joy = joystick_read();
 
-    // Test 2: clear to blue
-    display_clear(COLOR_BLUE);
-    sleep_ms(1000);
+        int dx = (int)joy.x - 2048;
+        int dy = (int)joy.y - 2048;
 
-    // Test 3: draw some text
-    display_clear(COLOR_BLACK);
-    display_write_string(10, 10, "PioNeer!", COLOR_WHITE);
-    display_write_string(10, 30, "SPI OK", COLOR_GREEN);
+        // deadzone
+        if (dx > -100 && dx < 100 && dy > -100 && dy < 100) {
+            printf("CENTER\n");
+        } else {
+            float angle = atan2f((float)dy, (float)dx) * 180.0f / M_PI;
+            if (angle < 0) angle += 360.0f;
+            printf("Angle: %.1f deg\n", angle);
+        }
 
-    while (true) {}
+        sleep_ms(100);
+    }
 }
