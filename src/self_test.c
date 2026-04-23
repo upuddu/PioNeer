@@ -157,7 +157,7 @@ static void my_delay_cb(uint32_t ms)
 
 void display_self_test(void)
 {
-    printf("[DISPLAY] Starting self-test...\n");
+    printf("[DISPLAY] Initializing...\n");
 
     spi_init(SPI_PORT, SPI_BAUD_HZ);
     spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
@@ -196,20 +196,6 @@ void display_self_test(void)
     void *buf2 = malloc(buf_size);
     lv_display_set_buffers(disp, buf1, buf2, buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
 
-    // 버튼 테스트 UI
-    lv_obj_t *btn = lv_button_create(lv_screen_active());
-    lv_obj_set_pos(btn, 10, 10);
-    lv_obj_set_size(btn, 120, 50);
-    lv_obj_t *label = lv_label_create(btn);
-    lv_label_set_text(label, "Display OK");
-    lv_obj_center(label);
-
-    // LVGL 몇 프레임 렌더링
-    for (int i = 0; i < 100; i++)
-    {
-        lv_timer_handler();
-        sleep_ms(10);
-    }
-
-    printf("[DISPLAY] Self-test complete.\n");
+    printf("[DISPLAY] Ready.\n");
+    // no UI, no lv_timer_handler loop — main_menu_init() takes over from here
 }
