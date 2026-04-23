@@ -29,7 +29,7 @@ TODO: THE PIN NUMBERS NEED TO BE UPDATED.
 #define SPI_CLK_PIN     18      // GPIO18_SPI0_SCK check
 #define SPI_MISO_PIN    16      // GPIO16_SPI0_RX check 
 #define SPI_BL_PIN      20      // GPIO20 (LED/backlight)
-#define SPI_BAUD_HZ     (10 * 1000 * 1000)
+#define SPI_BAUD_HZ     (2 * 1000 * 1000)   // drop to 2MHz for testing
 
 // ─── AUDIO (PWM) ─────────────────────────────────────────────────────────────
 #define AUDIO_PIN   38      // GP38 → PWM, through 4-stage filter to speaker check

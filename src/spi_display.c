@@ -7,14 +7,14 @@
 // ── Low-level helpers ─────────────────────────────────────────────────────────
 
 static void display_write_cmd(uint8_t cmd) {
-    gpio_put(SPI_DC_PIN, 1);    // DC high = command (ST7796)
+    gpio_put(SPI_DC_PIN, 0);    // DC high = command (ST7796)
     gpio_put(SPI_CS_PIN, 0);
     spi_write_blocking(SPI_PORT, &cmd, 1);
     gpio_put(SPI_CS_PIN, 1);
 }
 
 static void display_write_data(uint8_t data) {
-    gpio_put(SPI_DC_PIN, 0);    // DC low = data (ST7796)
+    gpio_put(SPI_DC_PIN, 1);    // DC low = data (ST7796)
     gpio_put(SPI_CS_PIN, 0);
     spi_write_blocking(SPI_PORT, &data, 1);
     gpio_put(SPI_CS_PIN, 1);
@@ -25,6 +25,7 @@ static void display_write_data(uint8_t data) {
 void display_init(void) {
     // SPI init
     spi_init(SPI_PORT, SPI_BAUD_HZ);
+    spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     gpio_set_function(SPI_CLK_PIN,  GPIO_FUNC_SPI);
     gpio_set_function(SPI_MOSI_PIN, GPIO_FUNC_SPI);
     gpio_set_function(SPI_MISO_PIN, GPIO_FUNC_SPI);
@@ -35,36 +36,22 @@ void display_init(void) {
     gpio_init(SPI_RST_PIN); gpio_set_dir(SPI_RST_PIN, GPIO_OUT); gpio_put(SPI_RST_PIN, 1);
     gpio_init(SPI_BL_PIN);  gpio_set_dir(SPI_BL_PIN,  GPIO_OUT); gpio_put(SPI_BL_PIN,  1);
 
-    // Hardware reset
-    gpio_put(SPI_RST_PIN, 0); sleep_ms(10);
-    gpio_put(SPI_RST_PIN, 1); sleep_ms(120);
+    // Long hardware reset
+    gpio_put(SPI_RST_PIN, 1); sleep_ms(50);
+    gpio_put(SPI_RST_PIN, 0); sleep_ms(200);  // longer reset pulse
+    gpio_put(SPI_RST_PIN, 1); sleep_ms(200);
 
-    // ST7796 init sequence
-    display_write_cmd(0x01);        // software reset
-    sleep_ms(100);
-    display_write_cmd(0x11);        // sleep out
-    sleep_ms(120);
+    // Hold CS low for entire init
+    gpio_put(SPI_CS_PIN, 0);
 
-    display_write_cmd(0x3A);        // pixel format
-    display_write_data(0x55);       // 16-bit RGB565
+    // ST7796 init
+    display_write_cmd(0x01);  sleep_ms(150);  // software reset
+    display_write_cmd(0x11);  sleep_ms(150);  // sleep out
+    display_write_cmd(0x3A);  display_write_data(0x55);  // RGB565
+    display_write_cmd(0x36);  display_write_data(0x48);  // memory access
+    display_write_cmd(0x29);  sleep_ms(50);   // display on
 
-    display_write_cmd(0x36);        // memory access control
-    display_write_data(0x48);       // MX, BGR
-
-    display_write_cmd(0x2A);        // column address set (0–479)
-    display_write_data(0x00);
-    display_write_data(0x00);
-    display_write_data(0x01);
-    display_write_data(0xDF);
-
-    display_write_cmd(0x2B);        // row address set (0–319)
-    display_write_data(0x00);
-    display_write_data(0x00);
-    display_write_data(0x01);
-    display_write_data(0x3F);
-
-    display_write_cmd(0x29);        // display on
-    sleep_ms(20);
+    gpio_put(SPI_CS_PIN, 1);
 }
 
 static void display_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
