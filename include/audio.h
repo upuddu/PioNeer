@@ -1,27 +1,22 @@
-#ifndef SUPPORT_H
-#define SUPPORT_H
+#ifndef AUDIO_H
+#define AUDIO_H
 
 #include <math.h>
 #include <stdint.h>
 
-// we defined this in main.c
-#define N 2000 // Size of the wavetable (doubled for smoother waveforms)
-short int wavetable[N];
+#define N 2000
+#define RATE 80000
 
-#define RATE 80000  // 80 kHz sample rate (Nyquist = 40 kHz)
+extern short int wavetable[N]; // defined in audio.c, not here
 
-// defined as extern here so that we can share it between
-// support.c and main.c, where they are included.
 extern int step0;
 extern int offset0;
 extern int step1;
 extern int offset1;
-
-// Part 3: Analog-to-digital conversion for a volume level.
 extern int volume;
 
-// Waveform types for testing
-typedef enum {
+typedef enum
+{
     WAVE_SINE = 0,
     WAVE_SAWTOOTH = 1,
     WAVE_SQUARE = 2,
@@ -30,12 +25,22 @@ typedef enum {
 
 extern WaveformType current_waveform;
 
+// Wavetable init
 void init_wavetable(void);
 void init_wavetable_sawtooth(void);
 void init_wavetable_square(void);
 void init_wavetable_triangle(void);
+
+// Audio control
 void set_waveform(WaveformType wave);
 void set_freq(int chan, float f);
+
+// PWM hardware
+void init_pwm_audio(void);
+
+// Test sequences
 void play_melody(void);
+void play_sweep(void);
+void play_chord(void);
 
 #endif

@@ -3,10 +3,9 @@
 
 #include "pico/stdlib.h"
 
-/*
-TODO: THE PIN NUMBERS NEED TO BE UPDATED.
-    THEY ARE ALL CURRENTLY PLACEHOLDERS.
-*/
+#ifndef M_PI
+#define M_PI 3.141592f
+#endif
 
 // ─── GPIO BUTTONS (XYAB) ──────────────────────────────────────────────────────
 #define BTN_A_PIN 36 // check
