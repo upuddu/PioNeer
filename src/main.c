@@ -1,58 +1,147 @@
+#include <stdio.h>
+#include <math.h>
 #include "pico/stdlib.h"
 #include "config.h"
-// #include "adc_joystick.h"
-#include "spi_display.h"
-// #include "i2c_dac.h"
-// #include "pio_neopixel.h"
-// #include "gpio_buttons.h"
-// #include "lunar_lander.h"
-// #include "car_racing.h"
-// #include "tank_battle.h"
+#include "adc_joystick.h"
+#include "gpio_buttons.h"
+#include "led_strip.h"
+#include "math.h"
 
-// int main(void) {
-//     stdio_init_all();
+#ifndef M_PI
+#define M_PI 3.141592f
+#endif
 
-//     // ── Init all peripherals ──────────────────────────────────────────────────
-//     buttons_init();
-//     joystick_init();
-//     display_init();
-//     dac_init();
-//     neopixel_init();
+// ── Button callback ───────────────────────────────────────────────────────────
+static const char *button_names[] = {"BTN_A", "BTN_B", "BTN_X", "BTN_Y"};
 
-//     // ── Game selection loop ───────────────────────────────────────────────────
-//     GameID selected = GAME_LUNAR_LANDER;  // default; replace with menu logic
+void button_event_handler(Button btn, ButtonState state)
+{
+    const char *state_str = (state == BTN_STATE_PRESSED) ? "pressed" : "released";
+    printf("[BUTTONS] %s %s\n", button_names[btn], state_str);
+}
 
-//     while (true) {
-//         switch (selected) {
-//             case GAME_LUNAR_LANDER: lunar_lander_run(); break;
-//             case GAME_CAR_RACING:   car_racing_run();   break;
-//             case GAME_TANK_BATTLE:  tank_battle_run();  break;
-//             default: break;
-//         }
-//     }
+// ── LED self-test ─────────────────────────────────────────────────────────────
+static void led_self_test(void)
+{
+    printf("[LED] Starting self-test...\n");
 
-//     return 0;
-// }
+    // Solid colors
+    led_strip_set_all_color(COLOR_RED);
+    led_strip_show();
+    sleep_ms(400);
+    led_strip_set_all_color(COLOR_GREEN);
+    led_strip_show();
+    sleep_ms(400);
+    led_strip_set_all_color(COLOR_BLUE);
+    led_strip_show();
+    sleep_ms(400);
 
-#include "pico/stdlib.h"
-#include "spi_display.h"
+    // Per-pixel RGB pattern
+    led_strip_clear();
+    for (uint8_t i = 0; i < WS2812_NUM_LEDS; i++)
+    {
+        if ((i % 3) == 0)
+            led_strip_set_pixel(i, 255, 0, 0);
+        else if ((i % 3) == 1)
+            led_strip_set_pixel(i, 0, 255, 0);
+        else
+            led_strip_set_pixel(i, 0, 0, 255);
+    }
+    led_strip_show();
+    sleep_ms(800);
 
-int main(void) {
+    // Brightness ramp
+    for (int b = 255; b >= 0; b -= 10)
+    {
+        led_strip_set_brightness((uint8_t)b);
+        led_strip_show();
+        sleep_ms(20);
+    }
+    for (int b = 0; b <= 255; b += 10)
+    {
+        led_strip_set_brightness((uint8_t)b);
+        led_strip_show();
+        sleep_ms(20);
+    }
+
+    // Rainbow + effects
+    led_strip_set_brightness(128);
+    led_strip_rainbow_cycle(10);
+    led_strip_rainbow_loading(100);
+
+    // Individual pixel effects
+    led_strip_clear();
+    led_strip_set_pixel(0, 255, 0, 0);
+    led_strip_set_pixel(WS2812_NUM_LEDS - 1, 0, 255, 0);
+    led_strip_show();
+    sleep_ms(1000);
+
+    led_strip_wave(COLOR_BLUE, 3, 50);
+    led_strip_bounce(COLOR_YELLOW, 100);
+    led_strip_pulse_pixel(2, COLOR_MAGENTA, 500);
+    led_strip_blink_pixel(5, COLOR_CYAN, 200, 200, 3);
+    led_strip_random_fill();
+    led_strip_show();
+    sleep_ms(2000);
+
+    led_strip_clear();
+    led_strip_show();
+    printf("[LED] Self-test complete.\n");
+}
+
+// ── Joystick read + print ─────────────────────────────────────────────────────
+static void joystick_poll(void)
+{
+    JoystickReading joy = joystick_read();
+    int dx = (int)joy.x - 2048;
+    int dy = (int)joy.y - 2048;
+
+    if (dx > -100 && dx < 100 && dy > -100 && dy < 100)
+    {
+        printf("[JOY] CENTER\n");
+    }
+    else
+    {
+        float angle = atan2f((float)dy, (float)dx) * 180.0f / M_PI;
+        if (angle < 0)
+            angle += 360.0f;
+        printf("[JOY] Angle: %.1f deg\n", angle);
+    }
+
+    if (joystick_sw_consume())
+    {
+        printf("[JOY] CLICK\n");
+    }
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+int main(void)
+{
     stdio_init_all();
-    display_init();
+    sleep_ms(2000);
+    printf("=== BOOT ===\n");
+    printf("=== PioNeer System Test ===\n");
 
-    // Test 1: clear to red
-    display_clear(COLOR_RED);
-    sleep_ms(1000);
+    // Buttons FIRST — registers the global IO_IRQ_BANK0 handler
+    printf("[INIT] Buttons...\n");
+    buttons_init();
+    buttons_set_callback(button_event_handler);
 
-    // Test 2: clear to blue
-    display_clear(COLOR_BLUE);
-    sleep_ms(1000);
+    // Joystick AFTER — can now safely enable its IRQ pin
+    printf("[INIT] Joystick...\n");
+    joystick_init();
+    joystick_sw_init();
 
-    // Test 3: draw some text
-    display_clear(COLOR_BLACK);
-    display_write_string(10, 10, "PioNeer!", COLOR_WHITE);
-    display_write_string(10, 30, "SPI OK", COLOR_GREEN);
+    printf("[INIT] LED strip...\n");
+    led_strip_init();
 
-    while (true) {}
+    led_self_test();
+
+    printf("[MAIN] Entering main loop.\n");
+    while (true)
+    {
+        joystick_poll();
+        sleep_ms(100);
+    }
+    return 0;
 }

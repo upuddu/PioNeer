@@ -53,6 +53,10 @@ static int64_t debounce_callback(alarm_id_t id, void *user_data)
 
 static void gpio_interrupt_handler(uint gpio, uint32_t events)
 {
+    if (gpio == JOYSTICK_SW_PIN)
+    {
+        joystick_sw_isr(); // delegate to joystick handler
+    }
     // Interrupt triggered, debounce sampling will handle state detection
     // This just ensures we start sampling on any edge
 }

@@ -14,5 +14,6 @@ void joystick_init(void);
 JoystickReading joystick_read(void);
 void joystick_sw_init(void);
 bool joystick_sw_consume(void); // returns true once per press, clears flag
+void joystick_sw_isr(void);
 
 #endif

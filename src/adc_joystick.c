@@ -13,17 +13,6 @@
 static volatile bool sw_pressed = false;
 static volatile uint32_t last_press_ms = 0;
 
-static void sw_isr(uint gpio, uint32_t events)
-{
-    gpio_acknowledge_irq(gpio, events);
-    uint32_t now = to_ms_since_boot(get_absolute_time());
-    if (now - last_press_ms > DEBOUNCE_MS)
-    {
-        sw_pressed = true;
-        last_press_ms = now;
-    }
-}
-
 void joystick_init(void)
 {
     adc_init();
@@ -46,9 +35,8 @@ void joystick_sw_init(void)
     gpio_init(JOYSTICK_SW_PIN);
     gpio_set_dir(JOYSTICK_SW_PIN, GPIO_IN);
     gpio_pull_up(JOYSTICK_SW_PIN);
-    gpio_set_irq_enabled_with_callback(JOYSTICK_SW_PIN,
-                                       GPIO_IRQ_EDGE_FALL, true, sw_isr);
-    irq_set_enabled(IO_IRQ_BANK0, true);
+    // Just enable the IRQ — callback is handled by gpio_buttons.c's shared handler
+    gpio_set_irq_enabled(JOYSTICK_SW_PIN, GPIO_IRQ_EDGE_FALL, true);
 }
 
 bool joystick_sw_consume(void)
@@ -59,4 +47,14 @@ bool joystick_sw_consume(void)
         return true;
     }
     return false;
+}
+
+void joystick_sw_isr(void)
+{
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    if (now - last_press_ms > DEBOUNCE_MS)
+    {
+        sw_pressed = true;
+        last_press_ms = now;
+    }
 }

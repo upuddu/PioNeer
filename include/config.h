@@ -19,6 +19,7 @@ TODO: THE PIN NUMBERS NEED TO BE UPDATED.
 #define JOYSTICK_Y_PIN 41 // ADC channel 1 check
 #define JOYSTICK_X_CH 0
 #define JOYSTICK_Y_CH 1
+#define JOYSTICK_SW_PIN 39
 
 // ─── TFT LCD (SPI0) ───────────────────────────────────────────────────────────
 #define SPI_PORT spi0
