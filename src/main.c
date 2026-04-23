@@ -3,6 +3,7 @@
 #include "config.h"
 #include "adc_joystick.h"
 #include "gpio_buttons.h"
+#include "self_test.h"
 #include "ui.h"
 
 int main(void)

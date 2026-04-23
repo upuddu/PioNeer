@@ -4,9 +4,19 @@
 #include "sd_api.h"
 #include "lvgl/lvgl.h"
 #include "pico/stdlib.h"
+#include "hardware/flash.h"
+#include "hardware/sync.h"
+#include "hardware/structs/scb.h"
+#include "hardware/watchdog.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+// ── Flash Configuration ───────────────────────────────────────────────────────
+// We will dedicate the first 1MB of Flash to the PioNeer menu.
+// Games will be flashed starting at the 1MB mark (0x100000 offset).
+#define GAME_FLASH_OFFSET 0x100000
+#define GAME_XIP_BASE     (XIP_BASE + GAME_FLASH_OFFSET)
 
 // ── Game list (dynamically loaded from SD card) ────────────────────────────────
 #define MAX_GAMES 256
@@ -17,6 +27,11 @@ static int num_games = 0;
 
 // ── State ─────────────────────────────────────────────────────────────────────
 static int cursor = 0;         // which tile is highlighted
+
+// Static buffer used to transfer the game from SD to Flash 
+// (Avoids heap fragmentation and memory allocation failures)
+#define GAME_BUF_SIZE (300 * 1024)
+static uint8_t game_transfer_buffer[GAME_BUF_SIZE] __attribute__((aligned(4)));
 
 // ── LVGL objects ─────────────────────────────────────────────────────────────
 static lv_obj_t *menu_screen = NULL;
@@ -83,6 +98,11 @@ static bool load_games_from_sd(void)
     {
         if (!file_list[i].is_dir)
         {
+            // NEW: Skip macOS metadata files (files starting with "._")
+            if (strncmp(file_list[i].name, "._", 2) == 0) {
+                continue;
+            }
+
             // Allocate memory for game name
             size_t name_len = strlen(file_list[i].name) + 1;
             game_names[game_idx] = (char *)malloc(name_len);
@@ -102,7 +122,7 @@ static bool load_games_from_sd(void)
 
     if (num_games == 0)
     {
-        printf("[UI] ERROR: No game files found (only directories?)\n");
+        printf("[UI] ERROR: No game files found (only directories or metadata?)\n");
         return false;
     }
 
@@ -129,9 +149,8 @@ static void build_menu_screen(void)
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 8);
 
     // Calculate grid dimensions based on game count
-    // Start with 3 columns, calculate rows needed
     int cols = (num_games <= 3) ? num_games : 3;
-    int rows = (num_games + cols - 1) / cols; // ceiling division
+    int rows = (num_games + cols - 1) / cols; 
 
     // Adjust tile size based on number of rows
     int tile_w = 148;
@@ -140,7 +159,6 @@ static void build_menu_screen(void)
     int y_start = 44;
     int gap = 6;
 
-    // If we have many rows, shrink tiles
     if (rows > 3)
     {
         tile_h = 60;
@@ -160,7 +178,7 @@ static void build_menu_screen(void)
         lv_obj_set_style_bg_color(tiles[i], game_colors[i], 0);
         lv_obj_set_style_border_width(tiles[i], 3, 0);
         lv_obj_set_style_border_color(tiles[i], lv_color_white(), 0);
-        lv_obj_set_style_border_opa(tiles[i], LV_OPA_TRANSP, 0); // hidden by default
+        lv_obj_set_style_border_opa(tiles[i], LV_OPA_TRANSP, 0); 
         lv_obj_set_style_radius(tiles[i], 8, 0);
 
         tile_labels[i] = lv_label_create(tiles[i]);
@@ -174,51 +192,86 @@ static void build_menu_screen(void)
 // ── Highlight cursor tile ─────────────────────────────────────────────────────
 static void update_cursor(int prev, int next)
 {
-    // Remove highlight from previous
     lv_obj_set_style_border_opa(tiles[prev], LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_opa(tiles[next], LV_OPA_COVER, 0);
     cursor = next;
 }
 
-// ── Launch selected game ─────────────────────────────────────────────────────
+// ── Launch selected game (DYNAMIC RP2350 SCAN LOGIC) ─────────────────────────
 static void launch_game(int game)
 {
-    printf("[MENU] Loading: %s\n", game_names[game]);
+    printf("[MENU] Preparing to flash: %s\n", game_names[game]);
     
-    // Construct full path
     char path[256];
     snprintf(path, sizeof(path), "0:/games/%s", game_names[game]);
     
-    // Allocate buffer for game binary
-    uint8_t *game_buffer = (uint8_t *)malloc(512 * 1024);  // 512KB buffer
-    if (game_buffer == NULL)
-    {
-        printf("[MENU] ERROR: Memory allocation failed\n");
-        return;
-    }
-    
-    // Read game binary from SD card
+    // 1. Read binary from SD into static RAM buffer
     size_t bytes_read = 0;
-    if (!sd_card_read_file(path, game_buffer, 512 * 1024, &bytes_read))
+    if (!sd_card_read_file(path, game_transfer_buffer, GAME_BUF_SIZE, &bytes_read) || bytes_read == 0)
     {
-        printf("[MENU] ERROR: Failed to load %s\n", game_names[game]);
-        free(game_buffer);
+        printf("[MENU] ERROR: Failed to load %s from SD card.\n", game_names[game]);
         return;
     }
     
-    printf("[MENU] Loaded %u bytes, executing...\n", (unsigned)bytes_read);
+    printf("[MENU] Loaded %u bytes into RAM. Flashing to XIP...\n", (unsigned)bytes_read);
     
-    // Cast buffer to function pointer and call
-    typedef void (*GameFunc)(void);
-    GameFunc game_entry = (GameFunc)game_buffer;
+    // 2. Erase and Program Flash
+    uint32_t ints = save_and_disable_interrupts();
     
-    // Execute the game
-    game_entry();
+    size_t erase_size = ((bytes_read + FLASH_SECTOR_SIZE - 1) / FLASH_SECTOR_SIZE) * FLASH_SECTOR_SIZE;
+    flash_range_erase(GAME_FLASH_OFFSET, erase_size);
     
-    printf("[MENU] Game returned, back to menu\n");
+    size_t prog_size = ((bytes_read + FLASH_PAGE_SIZE - 1) / FLASH_PAGE_SIZE) * FLASH_PAGE_SIZE;
+    flash_range_program(GAME_FLASH_OFFSET, game_transfer_buffer, prog_size);
     
-    // Free game memory
-    free(game_buffer);
+    restore_interrupts(ints);
+    
+    printf("[MENU] Flash complete. Scanning for RP2350 Vector Table...\n");
+    
+    // 3. Dynamically locate the Vector Table
+    uint32_t *search_ptr = (uint32_t *)GAME_XIP_BASE;
+    uint32_t sp = 0, pc = 0;
+    bool found_vt = false;
+    
+    // Scan the first 4KB of the flashed image
+    for (int i = 0; i < 1024; i++) {
+        uint32_t val_sp = search_ptr[i];
+        uint32_t val_pc = search_ptr[i+1];
+        
+        // A valid Stack Pointer is in SRAM (0x200... range)
+        // A valid Program Counter is in Flash (0x10... range)
+        if ((val_sp & 0xFFF00000) == 0x20000000 && (val_pc & 0xFF000000) == 0x10000000) {
+            // Cortex-M thumb instructions must be odd numbers (bit 0 is 1)
+            if (val_pc & 1) { 
+                sp = val_sp;
+                pc = val_pc;
+                found_vt = true;
+                printf("[MENU] Found Vector Table at offset 0x%03X\n", i * 4);
+                break;
+            }
+        }
+    }
+    
+    if (!found_vt) {
+        printf("[MENU] FATAL: Could not find a valid Vector Table in the binary!\n");
+        while(1);
+    }
+
+    printf("[MENU] Game SP: 0x%08lX\n", sp);
+    printf("[MENU] Game PC: 0x%08lX\n", pc);
+
+    // Sanity check: Did the linker script actually work in the Autobahn project?
+    if ((pc & 0xFFF00000) != GAME_XIP_BASE) {
+        printf("[MENU] FATAL: Game was compiled for the wrong offset!\n");
+        printf("[MENU] PC points to 0x%08lX, but it should start with 0x%03lX\n", pc, (GAME_XIP_BASE >> 20));
+        while(1); 
+    }
+
+    printf("[MENU] Triggering Watchdog hardware reset...\n");
+    
+    watchdog_reboot(pc, sp, 10);
+    
+    while(1);
 }
 
 // ── Reset menu to first game ──────────────────────────────────────────────────
@@ -232,7 +285,6 @@ static void reset_menu(void)
 // ── Public init ───────────────────────────────────────────────────────────────
 void main_menu_init(void)
 {
-    // Load games from SD card
     if (!load_games_from_sd())
     {
         printf("[UI] FATAL: Could not load games from SD card\n");
@@ -240,8 +292,6 @@ void main_menu_init(void)
     }
 
     build_menu_screen();
-
-    // Reset to first game
     reset_menu();
 
     printf("[MENU] Initialized with %d games.\n", num_games);
@@ -253,7 +303,6 @@ void main_menu_run(void)
     static uint32_t last_input_ms = 0;
     uint32_t now = to_ms_since_boot(get_absolute_time());
 
-    // Debounce inputs at 200ms
     if (now - last_input_ms < 200)
     {
         lv_timer_handler();
@@ -265,32 +314,28 @@ void main_menu_run(void)
     int dy = (int)joy.y - 2048;
     int threshold = 800;
 
-    // Navigate menu
     int prev = cursor;
     int next = cursor;
-
-    // Calculate grid dimensions
     int cols = (num_games <= 3) ? num_games : 3;
 
     if (dx > threshold)
-        next = cursor + 1; // right
+        next = cursor + 1; 
     else if (dx < -threshold)
-        next = cursor - 1; // left
+        next = cursor - 1; 
     else if (dy > threshold)
-        next = cursor + cols; // down
+        next = cursor + cols; 
     else if (dy < -threshold)
-        next = cursor - cols; // up
+        next = cursor - cols; 
 
-    // A button or joystick click = launch game
     if (joystick_sw_consume())
     {
         launch_game(cursor);
-        reset_menu();
+        // Note: reset_menu() will no longer execute because launch_game() takes total hardware control.
+        reset_menu(); 
         last_input_ms = now;
         return;
     }
 
-    // Clamp next to valid range
     if (next >= 0 && next < num_games && next != prev)
     {
         update_cursor(prev, next);

@@ -50,6 +50,7 @@
 #define SD_MOSI_PIN 27 // GPIO27_SPI1_TX
 #define SD_MISO_PIN 24 // GPIO24_SPI1_RX
 #define SD_CLK_PIN 26  // GPIO26_SPI1_SCK
+#define SD_SPI_BAUD (10 * 1000 * 1000) // BAUD Rate
 
 // ─── GAME SELECT ──────────────────────────────────────────────────────────────
 typedef enum
