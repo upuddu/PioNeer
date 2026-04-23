@@ -148,6 +148,48 @@ void led_strip_set_pixel_brightness(uint8_t index, uint8_t brightness) {
     pixel_brightness[index] = brightness;
 }
 
+uint8_t led_strip_get_pixel_brightness(uint8_t index) {
+    if (index >= WS2812_NUM_LEDS) return 0;
+    return pixel_brightness[index];
+}
+
+void led_strip_set_pixel_color_brightness(uint8_t index, LedColor color, uint8_t brightness) {
+    led_strip_set_pixel_color(index, color);
+    led_strip_set_pixel_brightness(index, brightness);
+}
+
+void led_strip_set_pixel_rgb_brightness(uint8_t index, uint8_t r, uint8_t g, uint8_t b, uint8_t brightness) {
+    led_strip_set_pixel(index, r, g, b);
+    led_strip_set_pixel_brightness(index, brightness);
+}
+
+void led_strip_dim_pixel(uint8_t index, uint8_t amount) {
+    if (index >= WS2812_NUM_LEDS) return;
+    pixel_brightness[index] = (pixel_brightness[index] > amount)
+                              ? pixel_brightness[index] - amount : 0;
+}
+
+void led_strip_set_brightness_range(uint8_t start, uint8_t count, uint8_t brightness) {
+    if (start >= WS2812_NUM_LEDS) return;
+    uint8_t end = (start + count > WS2812_NUM_LEDS) ? WS2812_NUM_LEDS : start + count;
+    for (uint8_t i = start; i < end; i++) {
+        pixel_brightness[i] = brightness;
+    }
+}
+
+void led_strip_dim_range(uint8_t start, uint8_t count, uint8_t amount) {
+    if (start >= WS2812_NUM_LEDS) return;
+    uint8_t end = (start + count > WS2812_NUM_LEDS) ? WS2812_NUM_LEDS : start + count;
+    for (uint8_t i = start; i < end; i++) {
+        pixel_brightness[i] = (pixel_brightness[i] > amount)
+                              ? pixel_brightness[i] - amount : 0;
+    }
+}
+
+void led_strip_reset_all_brightness(void) {
+    memset(pixel_brightness, 0xFF, sizeof(pixel_brightness));
+}
+
 static const rgb_t color_table[COLOR_COUNT] = {
     {255,   0,   0},
     {  0, 255,   0},
@@ -531,4 +573,128 @@ void led_strip_rotate_right(void) {
 
 void led_strip_fade_all(uint8_t fade_amount) {
     led_strip_fade_to_black(fade_amount);
+}
+
+// ─── Pattern Creation Helpers ────────────────────────────────────────
+
+void led_strip_alternating(LedColor color1, LedColor color2) {
+    if (color1 >= COLOR_COUNT || color2 >= COLOR_COUNT) return;
+    for (uint8_t i = 0; i < WS2812_NUM_LEDS; i++) {
+        leds[i] = (i % 2 == 0) ? color_table[color1] : color_table[color2];
+    }
+}
+
+void led_strip_set_every_n(LedColor color, uint8_t n, uint8_t offset) {
+    if (color >= COLOR_COUNT || n == 0) return;
+    for (uint8_t i = 0; i < WS2812_NUM_LEDS; i++) {
+        leds[i] = ((i + offset) % n == 0) ? color_table[color] : (rgb_t){0, 0, 0};
+    }
+}
+
+void led_strip_set_segment(uint8_t start, uint8_t end, uint8_t r, uint8_t g, uint8_t b) {
+    if (start >= WS2812_NUM_LEDS) return;
+    if (end >= WS2812_NUM_LEDS) end = WS2812_NUM_LEDS - 1;
+    for (uint8_t i = start; i <= end; i++) {
+        leds[i].r = r;
+        leds[i].g = g;
+        leds[i].b = b;
+    }
+}
+
+void led_strip_apply_color_map(const LedColor *map, uint8_t len) {
+    if (!map) return;
+    uint8_t count = (len < WS2812_NUM_LEDS) ? len : WS2812_NUM_LEDS;
+    for (uint8_t i = 0; i < count; i++) {
+        if (map[i] < COLOR_COUNT) {
+            leds[i] = color_table[map[i]];
+        }
+    }
+}
+
+// ─── New Animation / Effect Functions ───────────────────────────────
+
+void led_strip_sparkle(LedColor color, uint8_t count, uint32_t delay_ms) {
+    if (color >= COLOR_COUNT || count == 0) return;
+    // Save current state
+    rgb_t saved[WS2812_NUM_LEDS];
+    memcpy(saved, leds, sizeof(leds));
+
+    // Randomly light `count` LEDs
+    for (uint8_t k = 0; k < count; k++) {
+        uint8_t idx = (uint8_t)(rand() % WS2812_NUM_LEDS);
+        leds[idx] = color_table[color];
+    }
+    led_strip_show();
+    sleep_ms(delay_ms);
+
+    // Restore original state
+    memcpy(leds, saved, sizeof(leds));
+    led_strip_show();
+}
+
+void led_strip_strobe(LedColor color, uint8_t flashes, uint32_t delay_ms) {
+    if (color >= COLOR_COUNT) return;
+    for (uint8_t i = 0; i < flashes; i++) {
+        led_strip_set_all_color(color);
+        led_strip_show();
+        sleep_ms(delay_ms);
+        led_strip_clear();
+        led_strip_show();
+        sleep_ms(delay_ms);
+    }
+}
+
+void led_strip_meteor(LedColor color, uint8_t size, uint8_t fade_amount, uint32_t delay_ms) {
+    if (color >= COLOR_COUNT || size == 0) return;
+    rgb_t c = color_table[color];
+
+    for (int pos = 0; pos < WS2812_NUM_LEDS + WS2812_NUM_LEDS; pos++) {
+        // Fade all existing pixels toward black
+        for (uint8_t i = 0; i < WS2812_NUM_LEDS; i++) {
+            leds[i].r = (uint8_t)(leds[i].r > fade_amount ? leds[i].r - fade_amount : 0);
+            leds[i].g = (uint8_t)(leds[i].g > fade_amount ? leds[i].g - fade_amount : 0);
+            leds[i].b = (uint8_t)(leds[i].b > fade_amount ? leds[i].b - fade_amount : 0);
+        }
+        // Draw meteor head
+        for (uint8_t j = 0; j < size; j++) {
+            int led_pos = pos - j;
+            if (led_pos >= 0 && led_pos < WS2812_NUM_LEDS) {
+                leds[led_pos] = c;
+            }
+        }
+        led_strip_show();
+        sleep_ms(delay_ms);
+    }
+}
+
+void led_strip_twinkle_random(uint8_t count, uint32_t delay_ms) {
+    if (count == 0) return;
+    // Save state
+    rgb_t saved[WS2812_NUM_LEDS];
+    memcpy(saved, leds, sizeof(leds));
+
+    // Light random pixels with random colors
+    for (uint8_t k = 0; k < count; k++) {
+        uint8_t idx = (uint8_t)(rand() % WS2812_NUM_LEDS);
+        leds[idx].r = (uint8_t)(rand() % 256);
+        leds[idx].g = (uint8_t)(rand() % 256);
+        leds[idx].b = (uint8_t)(rand() % 256);
+    }
+    led_strip_show();
+    sleep_ms(delay_ms);
+
+    // Fade the twinkling pixels out gently
+    for (int step = 5; step >= 0; step--) {
+        for (uint8_t i = 0; i < WS2812_NUM_LEDS; i++) {
+            leds[i].r = (uint8_t)((leds[i].r * step) / 5);
+            leds[i].g = (uint8_t)((leds[i].g * step) / 5);
+            leds[i].b = (uint8_t)((leds[i].b * step) / 5);
+        }
+        led_strip_show();
+        sleep_ms(delay_ms / 6);
+    }
+
+    // Restore original state
+    memcpy(leds, saved, sizeof(leds));
+    led_strip_show();
 }

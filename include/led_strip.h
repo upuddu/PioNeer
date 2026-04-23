@@ -49,6 +49,27 @@ void led_strip_clear(void);
 // This is multiplied with the global brightness on show().
 void led_strip_set_pixel_brightness(uint8_t index, uint8_t brightness);
 
+// Get the current per-LED brightness scaling for a pixel.
+uint8_t led_strip_get_pixel_brightness(uint8_t index);
+
+// Set color (preset) AND per-LED brightness for a single LED in one call.
+void led_strip_set_pixel_color_brightness(uint8_t index, LedColor color, uint8_t brightness);
+
+// Set color (RGB) AND per-LED brightness for a single LED in one call.
+void led_strip_set_pixel_rgb_brightness(uint8_t index, uint8_t r, uint8_t g, uint8_t b, uint8_t brightness);
+
+// Reduce a single LED's per-LED brightness by amount (clamped to 0).
+void led_strip_dim_pixel(uint8_t index, uint8_t amount);
+
+// Set per-LED brightness for a range of LEDs.
+void led_strip_set_brightness_range(uint8_t start, uint8_t count, uint8_t brightness);
+
+// Reduce per-LED brightness of a range by amount (clamped to 0).
+void led_strip_dim_range(uint8_t start, uint8_t count, uint8_t amount);
+
+// Reset all per-LED brightness values back to 255 (full).
+void led_strip_reset_all_brightness(void);
+
 // ─── Per-LED Color Control (Extended) ──────────────────────────────
 // Get the current RGB values of a pixel.
 void led_strip_get_pixel_rgb(uint8_t index, uint8_t *r, uint8_t *g, uint8_t *b);
@@ -67,6 +88,21 @@ void led_strip_copy_pixel(uint8_t from_index, uint8_t to_index);
 
 // Swap colors between two pixels.
 void led_strip_swap_pixels(uint8_t index1, uint8_t index2);
+
+// ─── Pattern Creation Helpers ───────────────────────────────────────
+// Fill strip with two alternating preset colors (even=color1, odd=color2).
+void led_strip_alternating(LedColor color1, LedColor color2);
+
+// Light every Nth LED with a preset color; all others off.
+// offset shifts the starting position (0 = start at LED 0).
+void led_strip_set_every_n(LedColor color, uint8_t n, uint8_t offset);
+
+// Set LEDs from index start to end (inclusive) to an RGB color.
+void led_strip_set_segment(uint8_t start, uint8_t end, uint8_t r, uint8_t g, uint8_t b);
+
+// Apply an array of preset colors directly to the strip.
+// map[i] sets LED i; len entries are applied (clamped to NUM_LEDS).
+void led_strip_apply_color_map(const LedColor *map, uint8_t len);
 
 // ─── Pattern and Effect Functions ──────────────────────────────────
 // Fill the strip with a gradient between two RGB colors.
@@ -96,6 +132,20 @@ void led_strip_random_fill(void);
 
 // Set a random pixel to a random color.
 void led_strip_random_pixel(void);
+
+// Sparkle effect: randomly lights `count` LEDs with color, then clears.
+// Repeats once per call. Call in a loop for continuous sparkle.
+void led_strip_sparkle(LedColor color, uint8_t count, uint32_t delay_ms);
+
+// Strobe effect: flash the full strip `flashes` times with a color.
+void led_strip_strobe(LedColor color, uint8_t flashes, uint32_t delay_ms);
+
+// Meteor rain: a comet of `size` pixels travels across the strip leaving a
+// fading trail. fade_amount controls how fast the tail decays (1=slow, 64=fast).
+void led_strip_meteor(LedColor color, uint8_t size, uint8_t fade_amount, uint32_t delay_ms);
+
+// Twinkle: randomly lights `count` LEDs with random colors, then dims them out.
+void led_strip_twinkle_random(uint8_t count, uint32_t delay_ms);
 
 // ─── Utility Functions ─────────────────────────────────────────────
 // Reverse the order of LEDs in the strip.
