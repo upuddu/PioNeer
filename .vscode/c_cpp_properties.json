@@ -8,10 +8,10 @@
         {
             "name": "PlatformIO",
             "includePath": [
+                "/Users/umbertopuddu/PioNeer/src",
                 "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/lvgl",
                 "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/lvgl/src",
                 "/Users/umbertopuddu/PioNeer/include",
-                "/Users/umbertopuddu/PioNeer/src",
                 "/Users/umbertopuddu/.platformio/packages/framework-picosdk/generated",
                 "/Users/umbertopuddu/PioNeer/.pio/build/proton/generated",
                 "/Users/umbertopuddu/.platformio/packages/framework-picosdk/src/boards/include",
@@ -180,10 +180,10 @@
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
+                    "/Users/umbertopuddu/PioNeer/src",
                     "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/lvgl",
                     "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/lvgl/src",
                     "/Users/umbertopuddu/PioNeer/include",
-                    "/Users/umbertopuddu/PioNeer/src",
                     "/Users/umbertopuddu/.platformio/packages/framework-picosdk/generated",
                     "/Users/umbertopuddu/PioNeer/.pio/build/proton/generated",
                     "/Users/umbertopuddu/.platformio/packages/framework-picosdk/src/boards/include",
