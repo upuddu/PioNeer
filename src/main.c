@@ -7,6 +7,11 @@
 #include "led_strip.h"
 #include "audio.h"
 #include "self_test.h"
+#include "hardware/gpio.h"
+#include "hardware/spi.h"
+#include "lvgl/lvgl.h"
+#include "lvgl/src/drivers/display/st7796/lv_st7796.h"
+#include <stdlib.h>
 
 static const char *button_names[] = {"BTN_A", "BTN_B", "BTN_X", "BTN_Y"};
 
@@ -59,8 +64,9 @@ int main(void)
     printf("[INIT] Audio...\n");
     init_pwm_audio();
 
-    led_self_test();
-    audio_self_test();
+    // led_self_test();
+    // audio_self_test();
+    display_self_test();
 
     printf("[MAIN] Entering main loop.\n");
     while (true)

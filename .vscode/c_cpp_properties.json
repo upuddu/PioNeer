@@ -8,8 +8,11 @@
         {
             "name": "PlatformIO",
             "includePath": [
+                "/Users/minjoopark/Desktop/ECE362/Project/PioNeer/.pio/libdeps/proton/lvgl",
+                "/Users/minjoopark/Desktop/ECE362/Project/PioNeer/.pio/libdeps/proton/lvgl/src",
                 "/Users/minjoopark/Desktop/ECE362/Project/PioNeer/include",
                 "/Users/minjoopark/Desktop/ECE362/Project/PioNeer/src",
+                "/Users/minjoopark/Desktop/ECE362/Project/PioNeer/.pio/libdeps/proton",
                 "/Users/minjoopark/.platformio/packages/framework-picosdk/generated",
                 "/Users/minjoopark/Desktop/ECE362/Project/PioNeer/.pio/build/proton/generated",
                 "/Users/minjoopark/.platformio/packages/framework-picosdk/src/boards/include",
@@ -178,8 +181,11 @@
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
+                    "/Users/minjoopark/Desktop/ECE362/Project/PioNeer/.pio/libdeps/proton/lvgl",
+                    "/Users/minjoopark/Desktop/ECE362/Project/PioNeer/.pio/libdeps/proton/lvgl/src",
                     "/Users/minjoopark/Desktop/ECE362/Project/PioNeer/include",
                     "/Users/minjoopark/Desktop/ECE362/Project/PioNeer/src",
+                    "/Users/minjoopark/Desktop/ECE362/Project/PioNeer/.pio/libdeps/proton",
                     "/Users/minjoopark/.platformio/packages/framework-picosdk/generated",
                     "/Users/minjoopark/Desktop/ECE362/Project/PioNeer/.pio/build/proton/generated",
                     "/Users/minjoopark/.platformio/packages/framework-picosdk/src/boards/include",
@@ -348,6 +354,7 @@
             },
             "defines": [
                 "PLATFORMIO=60119",
+                "LV_CONF_INCLUDE_SIMPLE",
                 "F_CPU=150000000L",
                 "PICO_RP2350=1",
                 "PICO_RISCV=0",

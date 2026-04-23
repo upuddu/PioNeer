@@ -3,5 +3,6 @@
 
 void led_self_test(void);
 void audio_self_test(void);
+void display_self_test(void);
 
 #endif
