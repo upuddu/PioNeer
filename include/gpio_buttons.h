@@ -11,6 +11,7 @@ typedef enum {
 } Button;
 
 void buttons_init(void);
+void buttons_enable_interrupts(void);
 bool button_is_pressed(Button btn);
 
 #endif // GPIO_BUTTONS_H
