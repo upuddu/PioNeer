@@ -34,11 +34,11 @@ TODO: THE PIN NUMBERS NEED TO BE UPDATED.
 #define AUDIO_PIN   38      // GP38 → PWM, through 4-stage filter to speaker check
 
 // ─── NEOPIXEL (PIO) ───────────────────────────────────────────────────────────
-#define NEOPIXEL_PIN    22
-#define NEOPIXEL_COUNT  30                  // adjust to your strip length
+#define NEOPIXEL_PIN    9       // check
+#define NEOPIXEL_COUNT  10      // check
 
 // ─── DISPLAY DIMENSIONS ───────────────────────────────────────────────────────
-#define LCD_WIDTH       240
+#define LCD_WIDTH       480
 #define LCD_HEIGHT      320
 
 // ─── GAME SELECT ──────────────────────────────────────────────────────────────
