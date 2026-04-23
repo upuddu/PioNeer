@@ -6,8 +6,8 @@
 #define LV_COLOR_DEPTH 16
 #define LV_USE_ST7796 1
 #define LV_USE_DRAW_SW 1
-#define LV_USE_SYSMON 1
-#define LV_USE_PERF_MONITOR 1
+#define LV_USE_SYSMON 0
+#define LV_USE_PERF_MONITOR 0
 #define LV_USE_LABEL 1
 
 #define LV_FONT_MONTSERRAT_14 1
