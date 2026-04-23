@@ -113,10 +113,10 @@ FL_MAYBE_UNUSED void __compile_test() {
                   "fl::i32 should be integral");
     FL_STATIC_ASSERT(fl::is_integral<fl::u32>::value,
                   "fl::u32 should be integral");
-    FL_STATIC_ASSERT(fl::is_integral<i64>::value,
-                  "i64 should be integral");
-    FL_STATIC_ASSERT(fl::is_integral<u64>::value,
-                  "u64 should be integral");
+    FL_STATIC_ASSERT(fl::is_integral<fl::i64>::value,
+                  "fl::i64 should be integral");
+    FL_STATIC_ASSERT(fl::is_integral<fl::u64>::value,
+                  "fl::u64 should be integral");
     FL_STATIC_ASSERT(fl::is_integral<fl::i8 *>::value == false,
                   "fl::i8* should not be integral");
     FL_STATIC_ASSERT(fl::is_integral<fl::u8 *>::value == false,

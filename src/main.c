@@ -66,6 +66,9 @@ int main(void) {
         // Rainbow animation (one full cycle)
         led_strip_set_brightness(128);
         led_strip_rainbow_cycle(10);
+
+        // Rainbow loading animation (progressive fill)
+        led_strip_rainbow_loading(100);
     }
 
     return 0;

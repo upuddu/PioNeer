@@ -60,6 +60,8 @@
     defined(ARDUINO_ARCH_APOLLO3) || defined(FASTLED_APOLLO3) || \
     /* Raspberry Pi RP2040 */ \
     defined(ARDUINO_ARCH_RP2040) || defined(TARGET_RP2040) || \
+    /* Raspberry Pi RP2350 */ \
+    defined(PICO_RP2350) || defined(TARGET_RP2350) || \
     defined(PICO_32BIT) || defined(ARDUINO_RASPBERRY_PI_PICO) || \
     /* Silicon Labs EFM32 */ \
     defined(ARDUINO_ARCH_SILABS) || \

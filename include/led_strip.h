@@ -81,6 +81,9 @@ void led_strip_theater_chase(LedColor color, uint32_t delay_ms);
 // Rainbow cycle animation (one full cycle).
 void led_strip_rainbow_cycle(uint32_t delay_ms);
 
+// Rainbow loading animation (fills strip progressively with rainbow colors).
+void led_strip_rainbow_loading(uint32_t delay_ms);
+
 // Cycle through an array of preset colors, lighting up the full strip each time.
 void led_strip_color_sequence(const LedColor *colors, uint8_t num_colors,
                               uint32_t delay_ms);

@@ -10,7 +10,6 @@
             "includePath": [
                 "/Users/charvimetta/Desktop/ece362-project/PioNeer/include",
                 "/Users/charvimetta/Desktop/ece362-project/PioNeer/src",
-                "/Users/charvimetta/Desktop/ece362-project/PioNeer/lib/FastLED/src",
                 "/Users/charvimetta/.platformio/packages/framework-picosdk/generated",
                 "/Users/charvimetta/Desktop/ece362-project/PioNeer/.pio/build/proton/generated",
                 "/Users/charvimetta/.platformio/packages/framework-picosdk/src/boards/include",
@@ -174,6 +173,7 @@
                 "/Users/charvimetta/.platformio/packages/framework-picosdk/src/rp2_common/pico_standard_link/include",
                 "/Users/charvimetta/.platformio/packages/framework-picosdk/src/rp2_common/pico_fix/include",
                 "/Users/charvimetta/.platformio/packages/framework-picosdk/src/rp2350/boot_stage2/asminclude",
+                "/Users/charvimetta/Desktop/ece362-project/PioNeer/lib/FastLED/src",
                 ""
             ],
             "browse": {
@@ -181,7 +181,6 @@
                 "path": [
                     "/Users/charvimetta/Desktop/ece362-project/PioNeer/include",
                     "/Users/charvimetta/Desktop/ece362-project/PioNeer/src",
-                    "/Users/charvimetta/Desktop/ece362-project/PioNeer/lib/FastLED/src",
                     "/Users/charvimetta/.platformio/packages/framework-picosdk/generated",
                     "/Users/charvimetta/Desktop/ece362-project/PioNeer/.pio/build/proton/generated",
                     "/Users/charvimetta/.platformio/packages/framework-picosdk/src/boards/include",
@@ -345,6 +344,7 @@
                     "/Users/charvimetta/.platformio/packages/framework-picosdk/src/rp2_common/pico_standard_link/include",
                     "/Users/charvimetta/.platformio/packages/framework-picosdk/src/rp2_common/pico_fix/include",
                     "/Users/charvimetta/.platformio/packages/framework-picosdk/src/rp2350/boot_stage2/asminclude",
+                    "/Users/charvimetta/Desktop/ece362-project/PioNeer/lib/FastLED/src",
                     ""
                 ]
             },
@@ -371,7 +371,7 @@
                 "PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=0",
                 ""
             ],
-            "cppStandard": "gnu++17",
+            "cStandard": "gnu11",
             "compilerPath": "/Users/charvimetta/.platformio/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-gcc",
             "compilerArgs": [
                 "-mthumb",

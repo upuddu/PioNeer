@@ -9,6 +9,8 @@
 #include "platforms/avr/is_avr.h"
 // IWYU pragma: end_keep
 
+#if defined(ARDUINO) && FL_HAS_INCLUDE(<Arduino.h>)
+
 namespace fl {
 namespace platforms {
 
@@ -110,3 +112,5 @@ bool serial_is_buffered() FL_NOEXCEPT {
 
 } // namespace platforms
 } // namespace fl
+
+#endif // FL_HAS_INCLUDE(<Arduino.h>)

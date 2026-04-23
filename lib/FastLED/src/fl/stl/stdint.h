@@ -202,7 +202,11 @@ using fl::saccum1516;  // ok bare using
 using fl::accum124;    // ok bare using
 using fl::saccum114;   // ok bare using
 
-// Define standard integer type names for C++
+// Define standard integer type names for C++.
+// Some toolchains/frameworks (e.g. PicoSDK + libstdc++) will have already defined
+// these via <stdint.h>/<stddef.h>/<cstddef>. In C++ it's an error to re-typedef
+// these names, even if the underlying type matches.
+#if !defined(FASTLED_NO_STDINT_NAMES)
 // This avoids the slow <stdint.h> include while maintaining compatibility
 // 8-bit types use raw primitives to match system headers exactly (allows duplicate typedefs)
 typedef unsigned char uint8_t;
@@ -223,4 +227,5 @@ typedef fl::size size_t;
 typedef fl::uptr uintptr_t;
 typedef fl::iptr intptr_t;
 typedef fl::ptrdiff ptrdiff_t;
+#endif
 

@@ -1,101 +1,165 @@
-#define FASTLED_LEAN_AND_MEAN 1
-#include "FastLED.h"
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+
+#include "pico/stdlib.h"
+#include "hardware/pio.h"
+#include "hardware/clocks.h"
+#include "hardware/gpio.h"
+
+#include "ws2812.pio.h"
 #include "config.h"
 #include "led_strip.h"
-#include "pico/stdlib.h"
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Internal state
-// ═══════════════════════════════════════════════════════════════════════════════
+typedef struct {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} rgb_t;
 
-// FastLED pixel array (the framebuffer)
-static CRGB leds[WS2812_NUM_LEDS];
-
-// Per-LED brightness scaling (0-255), applied on top of global brightness
+static rgb_t leds[WS2812_NUM_LEDS];
 static uint8_t pixel_brightness[WS2812_NUM_LEDS];
+static uint8_t global_brightness = 128;
 
-// ─── Color Preset Lookup Table ──────────────────────────────────────────────
-static const CRGB color_table[COLOR_COUNT] = {
-    CRGB(255,   0,   0),   // COLOR_RED
-    CRGB(  0, 255,   0),   // COLOR_GREEN
-    CRGB(  0,   0, 255),   // COLOR_BLUE
-    CRGB(255, 255,   0),   // COLOR_YELLOW
-    CRGB(  0, 255, 255),   // COLOR_CYAN
-    CRGB(255,   0, 255),   // COLOR_MAGENTA
-    CRGB(255, 165,   0),   // COLOR_ORANGE
-    CRGB(128,   0, 128),   // COLOR_PURPLE
-    CRGB(255, 255, 255),   // COLOR_WHITE
-    CRGB(255, 200, 100),   // COLOR_WARM_WHITE
-};
+static PIO ws2812_pio = pio0;
+static uint ws2812_sm = 0;
+static uint ws2812_offset = 0;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Initialization
-// ═══════════════════════════════════════════════════════════════════════════════
-
-void led_strip_init(void) {
-    FastLED.addLeds<WS2812B, WS2812_PIN, GRB>(leds, WS2812_NUM_LEDS);
-    FastLED.setBrightness(128);  // default 50% brightness
-
-    // All per-LED brightnesses start at full
-    for (int i = 0; i < WS2812_NUM_LEDS; i++) {
-        pixel_brightness[i] = 255;
-    }
-
-    led_strip_clear();
-    led_strip_show();
+static inline uint8_t scale8(uint8_t value, uint8_t scale) {
+    return (uint8_t)(((uint16_t)value * (uint16_t)scale + 0x80) >> 8);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Global Brightness
-// ═══════════════════════════════════════════════════════════════════════════════
+static inline uint32_t rgb_to_grb(uint8_t r, uint8_t g, uint8_t b) {
+    // MSB-first output: put colors in upper 24 bits for correct bit ordering
+    return ((uint32_t)g << 24) | ((uint32_t)r << 16) | ((uint32_t)b << 8);
+}
+
+static void hsv_to_rgb(uint8_t hue, uint8_t sat, uint8_t val,
+                       uint8_t *out_r, uint8_t *out_g, uint8_t *out_b) {
+    if (sat == 0) {
+        *out_r = val;
+        *out_g = val;
+        *out_b = val;
+        return;
+    }
+
+    uint16_t region = hue / 43;
+    uint16_t remainder = (hue - (region * 43)) * 6;
+    uint16_t p = (val * (255 - sat)) >> 8;
+    uint16_t q = (val * (255 - ((sat * remainder) >> 8))) >> 8;
+    uint16_t t = (val * (255 - ((sat * (255 - remainder)) >> 8))) >> 8;
+
+    switch (region) {
+        case 0:
+            *out_r = val;
+            *out_g = t;
+            *out_b = p;
+            break;
+        case 1:
+            *out_r = q;
+            *out_g = val;
+            *out_b = p;
+            break;
+        case 2:
+            *out_r = p;
+            *out_g = val;
+            *out_b = t;
+            break;
+        case 3:
+            *out_r = p;
+            *out_g = q;
+            *out_b = val;
+            break;
+        case 4:
+            *out_r = t;
+            *out_g = p;
+            *out_b = val;
+            break;
+        default:
+            *out_r = val;
+            *out_g = p;
+            *out_b = q;
+            break;
+    }
+}
+
+void led_strip_init(void) {
+    ws2812_offset = pio_add_program(ws2812_pio, &ws2812_program);
+    
+    // Manually initialize with corrected shift direction (MSB-first for WS2812B)
+    pio_gpio_init(ws2812_pio, WS2812_PIN);
+    pio_sm_set_consecutive_pindirs(ws2812_pio, ws2812_sm, WS2812_PIN, 1, true);
+    
+    pio_sm_config c = ws2812_program_get_default_config(ws2812_offset);
+    sm_config_set_sideset_pins(&c, WS2812_PIN);
+    // CRITICAL: shift_right=TRUE (MSB-first) for correct WS2812B bit order
+    sm_config_set_out_shift(&c, true, true, 24);  
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    
+    int cycles_per_bit = ws2812_T1 + ws2812_T2 + ws2812_T3;
+    float div = (float)clock_get_hz(clk_sys) / (800000.0f * (float)cycles_per_bit);
+    sm_config_set_clkdiv(&c, div);
+    
+    pio_sm_init(ws2812_pio, ws2812_sm, ws2812_offset, &c);
+    pio_sm_set_enabled(ws2812_pio, ws2812_sm, true);
+
+    global_brightness = 128;
+    memset(pixel_brightness, 0xFF, sizeof(pixel_brightness));
+    led_strip_clear();
+    led_strip_show();
+    
+    printf("LED strip initialized on GPIO%d (MSB-first PIO shift)\n", WS2812_PIN);
+}
 
 void led_strip_set_brightness(uint8_t brightness) {
-    FastLED.setBrightness(brightness);
+    global_brightness = brightness;
 }
 
 uint8_t led_strip_get_brightness(void) {
-    return FastLED.getBrightness();
+    return global_brightness;
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Per-LED Color Control
-// ═══════════════════════════════════════════════════════════════════════════════
 
 void led_strip_set_pixel(uint8_t index, uint8_t r, uint8_t g, uint8_t b) {
     if (index >= WS2812_NUM_LEDS) return;
-    leds[index] = CRGB(r, g, b);
+    leds[index].r = r;
+    leds[index].g = g;
+    leds[index].b = b;
 }
 
 void led_strip_set_pixel_hsv(uint8_t index, uint8_t h, uint8_t s, uint8_t v) {
     if (index >= WS2812_NUM_LEDS) return;
-    leds[index] = CHSV(h, s, v);
+    hsv_to_rgb(h, s, v, &leds[index].r, &leds[index].g, &leds[index].b);
 }
 
 void led_strip_set_all(uint8_t r, uint8_t g, uint8_t b) {
-    CRGB color(r, g, b);
     for (int i = 0; i < WS2812_NUM_LEDS; i++) {
-        leds[i] = color;
+        leds[i].r = r;
+        leds[i].g = g;
+        leds[i].b = b;
     }
 }
 
 void led_strip_clear(void) {
-    for (int i = 0; i < WS2812_NUM_LEDS; i++) {
-        leds[i] = CRGB::Black;
-    }
+    memset(leds, 0, sizeof(leds));
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Per-LED Brightness
-// ═══════════════════════════════════════════════════════════════════════════════
 
 void led_strip_set_pixel_brightness(uint8_t index, uint8_t brightness) {
     if (index >= WS2812_NUM_LEDS) return;
     pixel_brightness[index] = brightness;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Color Presets
-// ═══════════════════════════════════════════════════════════════════════════════
+static const rgb_t color_table[COLOR_COUNT] = {
+    {255,   0,   0},
+    {  0, 255,   0},
+    {  0,   0, 255},
+    {255, 255,   0},
+    {  0, 255, 255},
+    {255,   0, 255},
+    {255, 165,   0},
+    {128,   0, 128},
+    {255, 255, 255},
+    {255, 200, 100},
+};
 
 void led_strip_set_pixel_color(uint8_t index, LedColor color) {
     if (index >= WS2812_NUM_LEDS || color >= COLOR_COUNT) return;
@@ -119,48 +183,38 @@ void led_strip_get_color_rgb(LedColor color, uint8_t *r, uint8_t *g, uint8_t *b)
     *b = color_table[color].b;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Display Update
-// ═══════════════════════════════════════════════════════════════════════════════
-
 void led_strip_show(void) {
-    // Apply per-LED brightness scaling:
-    // Save original colors, scale each LED, show, then restore.
-    CRGB saved[WS2812_NUM_LEDS];
     for (int i = 0; i < WS2812_NUM_LEDS; i++) {
-        saved[i] = leds[i];
-        if (pixel_brightness[i] < 255) {
-            leds[i].nscale8(pixel_brightness[i]);
-        }
-    }
+        uint8_t r = scale8(leds[i].r, global_brightness);
+        uint8_t g = scale8(leds[i].g, global_brightness);
+        uint8_t b = scale8(leds[i].b, global_brightness);
 
-    FastLED.show();
+        r = scale8(r, pixel_brightness[i]);
+        g = scale8(g, pixel_brightness[i]);
+        b = scale8(b, pixel_brightness[i]);
 
-    // Restore original unscaled colors so subsequent set calls aren't
-    // cumulative lossy.
-    for (int i = 0; i < WS2812_NUM_LEDS; i++) {
-        leds[i] = saved[i];
+        // MSB-first format for PIO output
+        uint32_t grb = ((uint32_t)g << 24) | ((uint32_t)r << 16) | ((uint32_t)b << 8);
+        pio_sm_put_blocking(ws2812_pio, ws2812_sm, grb);
     }
+    sleep_us(80);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Color Sequences / Animations
-// ═══════════════════════════════════════════════════════════════════════════════
 
 void led_strip_fill_rainbow(uint8_t start_hue, uint8_t hue_step) {
     for (int i = 0; i < WS2812_NUM_LEDS; i++) {
-        leds[i] = CHSV(start_hue + (i * hue_step), 255, 255);
+        uint8_t hue = (uint8_t)(start_hue + (uint8_t)(i * hue_step));
+        hsv_to_rgb(hue, 255, 255, &leds[i].r, &leds[i].g, &leds[i].b);
     }
 }
 
 void led_strip_fill_gradient(uint8_t r1, uint8_t g1, uint8_t b1,
                              uint8_t r2, uint8_t g2, uint8_t b2) {
+    if (WS2812_NUM_LEDS == 0) return;
     for (int i = 0; i < WS2812_NUM_LEDS; i++) {
-        uint8_t blend = (i * 255) / (WS2812_NUM_LEDS - 1);
-        uint8_t r = r1 + ((int)(r2 - r1) * blend) / 255;
-        uint8_t g = g1 + ((int)(g2 - g1) * blend) / 255;
-        uint8_t b = b1 + ((int)(b2 - b1) * blend) / 255;
-        leds[i] = CRGB(r, g, b);
+        uint8_t blend = (uint8_t)((i * 255) / (WS2812_NUM_LEDS - 1));
+        leds[i].r = (uint8_t)(r1 + ((int)(r2 - r1) * blend) / 255);
+        leds[i].g = (uint8_t)(g1 + ((int)(g2 - g1) * blend) / 255);
+        leds[i].b = (uint8_t)(b1 + ((int)(b2 - b1) * blend) / 255);
     }
 }
 
@@ -175,11 +229,11 @@ void led_strip_color_wipe(LedColor color, uint32_t delay_ms) {
 
 void led_strip_theater_chase(LedColor color, uint32_t delay_ms) {
     if (color >= COLOR_COUNT) return;
-    CRGB c = color_table[color];
+    rgb_t c = color_table[color];
     for (int cycle = 0; cycle < 10; cycle++) {
         for (int offset = 0; offset < 3; offset++) {
             for (int i = 0; i < WS2812_NUM_LEDS; i++) {
-                leds[i] = ((i + offset) % 3 == 0) ? c : CRGB::Black;
+                leds[i] = ((i + offset) % 3 == 0) ? c : (rgb_t){0, 0, 0};
             }
             led_strip_show();
             sleep_ms(delay_ms);
@@ -190,17 +244,37 @@ void led_strip_theater_chase(LedColor color, uint32_t delay_ms) {
 void led_strip_rainbow_cycle(uint32_t delay_ms) {
     for (int j = 0; j < 256; j++) {
         for (int i = 0; i < WS2812_NUM_LEDS; i++) {
-            uint8_t hue = ((i * 256 / WS2812_NUM_LEDS) + j) & 0xFF;
-            leds[i] = CHSV(hue, 255, 255);
+            uint8_t hue = (uint8_t)(((i * 256) / WS2812_NUM_LEDS) + j);
+            hsv_to_rgb(hue, 255, 255, &leds[i].r, &leds[i].g, &leds[i].b);
         }
         led_strip_show();
         sleep_ms(delay_ms);
     }
 }
 
+void led_strip_rainbow_loading(uint32_t delay_ms) {
+    // Fill the strip progressively with rainbow colors (loading bar effect)
+    for (int fill = 0; fill <= WS2812_NUM_LEDS; fill++) {
+        for (int i = 0; i < WS2812_NUM_LEDS; i++) {
+            if (i < fill) {
+                // Rainbow color based on position
+                uint8_t hue = (uint8_t)((i * 256) / WS2812_NUM_LEDS);
+                hsv_to_rgb(hue, 255, 255, &leds[i].r, &leds[i].g, &leds[i].b);
+            } else {
+                // Turn off LEDs beyond the fill point
+                leds[i] = (rgb_t){0, 0, 0};
+            }
+        }
+        led_strip_show();
+        sleep_ms(delay_ms);
+    }
+    // Optional: Keep the full rainbow for a moment
+    sleep_ms(delay_ms * 2);
+}
+
 void led_strip_color_sequence(const LedColor *colors, uint8_t num_colors,
                               uint32_t delay_ms) {
-    for (int c = 0; c < num_colors; c++) {
+    for (uint8_t c = 0; c < num_colors; c++) {
         if (colors[c] < COLOR_COUNT) {
             led_strip_set_all_color(colors[c]);
             led_strip_show();
@@ -209,12 +283,9 @@ void led_strip_color_sequence(const LedColor *colors, uint8_t num_colors,
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Utility
-// ═══════════════════════════════════════════════════════════════════════════════
-
 void led_strip_shift_left(void) {
-    CRGB first = leds[0];
+    if (WS2812_NUM_LEDS == 0) return;
+    rgb_t first = leds[0];
     for (int i = 0; i < WS2812_NUM_LEDS - 1; i++) {
         leds[i] = leds[i + 1];
     }
@@ -222,7 +293,8 @@ void led_strip_shift_left(void) {
 }
 
 void led_strip_shift_right(void) {
-    CRGB last = leds[WS2812_NUM_LEDS - 1];
+    if (WS2812_NUM_LEDS == 0) return;
+    rgb_t last = leds[WS2812_NUM_LEDS - 1];
     for (int i = WS2812_NUM_LEDS - 1; i > 0; i--) {
         leds[i] = leds[i - 1];
     }
@@ -231,7 +303,8 @@ void led_strip_shift_right(void) {
 
 void led_strip_fade_to_black(uint8_t fade_amount) {
     for (int i = 0; i < WS2812_NUM_LEDS; i++) {
-        leds[i].fadeToBlackBy(fade_amount);
+        leds[i].r = (uint8_t)(leds[i].r > fade_amount ? leds[i].r - fade_amount : 0);
+        leds[i].g = (uint8_t)(leds[i].g > fade_amount ? leds[i].g - fade_amount : 0);
+        leds[i].b = (uint8_t)(leds[i].b > fade_amount ? leds[i].b - fade_amount : 0);
     }
 }
-
