@@ -69,6 +69,21 @@ int main(void) {
 
         // Rainbow loading animation (progressive fill)
         led_strip_rainbow_loading(100);
+
+        // Demo new functions
+        led_strip_clear();
+        led_strip_set_pixel(0, 255, 0, 0);  // Red on first LED
+        led_strip_set_pixel(WS2812_NUM_LEDS-1, 0, 255, 0);  // Green on last LED
+        led_strip_show();
+        sleep_ms(1000);
+
+        led_strip_wave(COLOR_BLUE, 3, 50);  // Blue wave effect
+        led_strip_bounce(COLOR_YELLOW, 100);  // Yellow bouncing light
+        led_strip_pulse_pixel(2, COLOR_MAGENTA, 500);  // Pulse LED 2 magenta
+        led_strip_blink_pixel(5, COLOR_CYAN, 200, 200, 3);  // Blink LED 5 cyan 3 times
+        led_strip_random_fill();  // Random colors
+        led_strip_show();
+        sleep_ms(2000);
     }
 
     return 0;

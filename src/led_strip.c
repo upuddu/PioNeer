@@ -308,3 +308,227 @@ void led_strip_fade_to_black(uint8_t fade_amount) {
         leds[i].b = (uint8_t)(leds[i].b > fade_amount ? leds[i].b - fade_amount : 0);
     }
 }
+
+// ─── Extended Per-LED Control Functions ─────────────────────────────
+
+void led_strip_get_pixel_rgb(uint8_t index, uint8_t *r, uint8_t *g, uint8_t *b) {
+    if (index >= WS2812_NUM_LEDS || !r || !g || !b) return;
+    *r = leds[index].r;
+    *g = leds[index].g;
+    *b = leds[index].b;
+}
+
+void led_strip_set_range_rgb(uint8_t start, uint8_t count, uint8_t r, uint8_t g, uint8_t b) {
+    if (start >= WS2812_NUM_LEDS) return;
+    uint8_t end = (start + count > WS2812_NUM_LEDS) ? WS2812_NUM_LEDS : start + count;
+    for (uint8_t i = start; i < end; i++) {
+        leds[i].r = r;
+        leds[i].g = g;
+        leds[i].b = b;
+    }
+}
+
+void led_strip_set_range_color(uint8_t start, uint8_t count, LedColor color) {
+    if (color >= COLOR_COUNT) return;
+    led_strip_set_range_rgb(start, count, color_table[color].r, color_table[color].g, color_table[color].b);
+}
+
+void led_strip_clear_range(uint8_t start, uint8_t count) {
+    led_strip_set_range_rgb(start, count, 0, 0, 0);
+}
+
+void led_strip_copy_pixel(uint8_t from_index, uint8_t to_index) {
+    if (from_index >= WS2812_NUM_LEDS || to_index >= WS2812_NUM_LEDS) return;
+    leds[to_index] = leds[from_index];
+}
+
+void led_strip_swap_pixels(uint8_t index1, uint8_t index2) {
+    if (index1 >= WS2812_NUM_LEDS || index2 >= WS2812_NUM_LEDS) return;
+    rgb_t temp = leds[index1];
+    leds[index1] = leds[index2];
+    leds[index2] = temp;
+}
+
+// ─── Pattern and Effect Functions ───────────────────────────────────
+
+void led_strip_gradient_fill(uint8_t r1, uint8_t g1, uint8_t b1,
+                             uint8_t r2, uint8_t g2, uint8_t b2) {
+    if (WS2812_NUM_LEDS == 0) return;
+    for (int i = 0; i < WS2812_NUM_LEDS; i++) {
+        uint8_t blend = (uint8_t)((i * 255) / (WS2812_NUM_LEDS - 1));
+        leds[i].r = (uint8_t)(r1 + ((int)(r2 - r1) * blend) / 255);
+        leds[i].g = (uint8_t)(g1 + ((int)(g2 - g1) * blend) / 255);
+        leds[i].b = (uint8_t)(b1 + ((int)(b2 - b1) * blend) / 255);
+    }
+}
+
+void led_strip_wave(LedColor color, uint8_t width, uint32_t delay_ms) {
+    if (color >= COLOR_COUNT || width == 0) return;
+    rgb_t c = color_table[color];
+    
+    for (int pos = -width; pos < WS2812_NUM_LEDS + width; pos++) {
+        led_strip_clear();
+        for (int i = 0; i < width; i++) {
+            int led_pos = pos + i;
+            if (led_pos >= 0 && led_pos < WS2812_NUM_LEDS) {
+                leds[led_pos] = c;
+            }
+        }
+        led_strip_show();
+        sleep_ms(delay_ms);
+    }
+}
+
+void led_strip_bounce(LedColor color, uint32_t delay_ms) {
+    if (color >= COLOR_COUNT) return;
+    rgb_t c = color_table[color];
+    
+    // Forward
+    for (int i = 0; i < WS2812_NUM_LEDS; i++) {
+        led_strip_clear();
+        leds[i] = c;
+        led_strip_show();
+        sleep_ms(delay_ms);
+    }
+    // Backward
+    for (int i = WS2812_NUM_LEDS - 2; i > 0; i--) {
+        led_strip_clear();
+        leds[i] = c;
+        led_strip_show();
+        sleep_ms(delay_ms);
+    }
+}
+
+void led_strip_chase(LedColor color, uint8_t spacing, uint32_t delay_ms) {
+    if (color >= COLOR_COUNT || spacing == 0) return;
+    rgb_t c = color_table[color];
+    
+    for (int offset = 0; offset < spacing; offset++) {
+        for (int cycle = 0; cycle < 5; cycle++) {  // 5 cycles
+            for (int i = 0; i < WS2812_NUM_LEDS; i++) {
+                leds[i] = ((i + offset) % spacing == 0) ? c : (rgb_t){0, 0, 0};
+            }
+            led_strip_show();
+            sleep_ms(delay_ms);
+        }
+    }
+}
+
+void led_strip_pulse_all(LedColor color, uint32_t duration_ms) {
+    if (color >= COLOR_COUNT) return;
+    rgb_t c = color_table[color];
+    
+    // Fade up
+    for (int b = 0; b <= 255; b += 5) {
+        for (int i = 0; i < WS2812_NUM_LEDS; i++) {
+            leds[i].r = (uint8_t)((c.r * b) / 255);
+            leds[i].g = (uint8_t)((c.g * b) / 255);
+            leds[i].b = (uint8_t)((c.b * b) / 255);
+        }
+        led_strip_show();
+        sleep_ms(duration_ms / (255 / 5) / 2);
+    }
+    // Fade down
+    for (int b = 255; b >= 0; b -= 5) {
+        for (int i = 0; i < WS2812_NUM_LEDS; i++) {
+            leds[i].r = (uint8_t)((c.r * b) / 255);
+            leds[i].g = (uint8_t)((c.g * b) / 255);
+            leds[i].b = (uint8_t)((c.b * b) / 255);
+        }
+        led_strip_show();
+        sleep_ms(duration_ms / (255 / 5) / 2);
+    }
+}
+
+void led_strip_pulse_pixel(uint8_t index, LedColor color, uint32_t duration_ms) {
+    if (index >= WS2812_NUM_LEDS || color >= COLOR_COUNT) return;
+    rgb_t original = leds[index];
+    rgb_t c = color_table[color];
+    
+    // Fade up
+    for (int b = 0; b <= 255; b += 5) {
+        leds[index].r = (uint8_t)((c.r * b) / 255);
+        leds[index].g = (uint8_t)((c.g * b) / 255);
+        leds[index].b = (uint8_t)((c.b * b) / 255);
+        led_strip_show();
+        sleep_ms(duration_ms / (255 / 5) / 2);
+    }
+    // Fade down
+    for (int b = 255; b >= 0; b -= 5) {
+        leds[index].r = (uint8_t)((c.r * b) / 255);
+        leds[index].g = (uint8_t)((c.g * b) / 255);
+        leds[index].b = (uint8_t)((c.b * b) / 255);
+        led_strip_show();
+        sleep_ms(duration_ms / (255 / 5) / 2);
+    }
+    leds[index] = original;
+}
+
+void led_strip_blink_pixel(uint8_t index, LedColor color, uint32_t on_time_ms, uint32_t off_time_ms, uint8_t cycles) {
+    if (index >= WS2812_NUM_LEDS || color >= COLOR_COUNT) return;
+    rgb_t original = leds[index];
+    rgb_t c = color_table[color];
+    
+    for (uint8_t i = 0; i < cycles; i++) {
+        leds[index] = c;
+        led_strip_show();
+        sleep_ms(on_time_ms);
+        leds[index] = (rgb_t){0, 0, 0};
+        led_strip_show();
+        sleep_ms(off_time_ms);
+    }
+    leds[index] = original;
+}
+
+void led_strip_random_fill(void) {
+    for (int i = 0; i < WS2812_NUM_LEDS; i++) {
+        leds[i].r = (uint8_t)(rand() % 256);
+        leds[i].g = (uint8_t)(rand() % 256);
+        leds[i].b = (uint8_t)(rand() % 256);
+    }
+}
+
+void led_strip_random_pixel(void) {
+    uint8_t index = (uint8_t)(rand() % WS2812_NUM_LEDS);
+    leds[index].r = (uint8_t)(rand() % 256);
+    leds[index].g = (uint8_t)(rand() % 256);
+    leds[index].b = (uint8_t)(rand() % 256);
+}
+
+// ─── Utility Functions ──────────────────────────────────────────────
+
+void led_strip_reverse(void) {
+    for (int i = 0; i < WS2812_NUM_LEDS / 2; i++) {
+        rgb_t temp = leds[i];
+        leds[i] = leds[WS2812_NUM_LEDS - 1 - i];
+        leds[WS2812_NUM_LEDS - 1 - i] = temp;
+    }
+}
+
+void led_strip_mirror(void) {
+    for (int i = 0; i < WS2812_NUM_LEDS / 2; i++) {
+        leds[WS2812_NUM_LEDS - 1 - i] = leds[i];
+    }
+}
+
+void led_strip_rotate_left(void) {
+    if (WS2812_NUM_LEDS == 0) return;
+    rgb_t first = leds[0];
+    for (int i = 0; i < WS2812_NUM_LEDS - 1; i++) {
+        leds[i] = leds[i + 1];
+    }
+    leds[WS2812_NUM_LEDS - 1] = first;
+}
+
+void led_strip_rotate_right(void) {
+    if (WS2812_NUM_LEDS == 0) return;
+    rgb_t last = leds[WS2812_NUM_LEDS - 1];
+    for (int i = WS2812_NUM_LEDS - 1; i > 0; i--) {
+        leds[i] = leds[i - 1];
+    }
+    leds[0] = last;
+}
+
+void led_strip_fade_all(uint8_t fade_amount) {
+    led_strip_fade_to_black(fade_amount);
+}

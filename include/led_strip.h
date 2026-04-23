@@ -49,6 +49,70 @@ void led_strip_clear(void);
 // This is multiplied with the global brightness on show().
 void led_strip_set_pixel_brightness(uint8_t index, uint8_t brightness);
 
+// ─── Per-LED Color Control (Extended) ──────────────────────────────
+// Get the current RGB values of a pixel.
+void led_strip_get_pixel_rgb(uint8_t index, uint8_t *r, uint8_t *g, uint8_t *b);
+
+// Set a range of LEDs to the same RGB color.
+void led_strip_set_range_rgb(uint8_t start, uint8_t count, uint8_t r, uint8_t g, uint8_t b);
+
+// Set a range of LEDs to the same preset color.
+void led_strip_set_range_color(uint8_t start, uint8_t count, LedColor color);
+
+// Clear a range of LEDs (set to black).
+void led_strip_clear_range(uint8_t start, uint8_t count);
+
+// Copy color from one pixel to another.
+void led_strip_copy_pixel(uint8_t from_index, uint8_t to_index);
+
+// Swap colors between two pixels.
+void led_strip_swap_pixels(uint8_t index1, uint8_t index2);
+
+// ─── Pattern and Effect Functions ──────────────────────────────────
+// Fill the strip with a gradient between two RGB colors.
+void led_strip_gradient_fill(uint8_t r1, uint8_t g1, uint8_t b1,
+                             uint8_t r2, uint8_t g2, uint8_t b2);
+
+// Create a wave effect with a color moving across the strip.
+void led_strip_wave(LedColor color, uint8_t width, uint32_t delay_ms);
+
+// Bounce effect: light moves back and forth across the strip.
+void led_strip_bounce(LedColor color, uint32_t delay_ms);
+
+// Chase effect: lights chase each other across the strip.
+void led_strip_chase(LedColor color, uint8_t spacing, uint32_t delay_ms);
+
+// Pulse all LEDs to a color and back to black.
+void led_strip_pulse_all(LedColor color, uint32_t duration_ms);
+
+// Pulse a single pixel to a color and back.
+void led_strip_pulse_pixel(uint8_t index, LedColor color, uint32_t duration_ms);
+
+// Blink a pixel on/off with a color.
+void led_strip_blink_pixel(uint8_t index, LedColor color, uint32_t on_time_ms, uint32_t off_time_ms, uint8_t cycles);
+
+// Fill strip with random colors.
+void led_strip_random_fill(void);
+
+// Set a random pixel to a random color.
+void led_strip_random_pixel(void);
+
+// ─── Utility Functions ─────────────────────────────────────────────
+// Reverse the order of LEDs in the strip.
+void led_strip_reverse(void);
+
+// Mirror the strip (copy left half to right half).
+void led_strip_mirror(void);
+
+// Rotate all pixels left by one position.
+void led_strip_rotate_left(void);
+
+// Rotate all pixels right by one position.
+void led_strip_rotate_right(void);
+
+// Fade all pixels toward black by fade_amount.
+void led_strip_fade_all(uint8_t fade_amount);
+
 // ─── Color Presets ──────────────────────────────────────────────────
 // Set a single LED to a preset color.
 void led_strip_set_pixel_color(uint8_t index, LedColor color);
