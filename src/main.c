@@ -7,12 +7,6 @@
 int main(void) {
     stdio_init_all();
 
-    // Init buttons on GPIO34-37
-    buttons_init();
-
-    // Enable interrupts — prints button name on press
-    buttons_enable_interrupts();
-
     // Init WS2812B LED strip on GPIO9 (20 LEDs)
     led_strip_init();
 
