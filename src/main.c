@@ -11,6 +11,8 @@
 #include "hardware/spi.h"
 #include "lvgl/lvgl.h"
 #include "lvgl/src/drivers/display/st7796/lv_st7796.h"
+#include "snake.h"
+#include "reaction.h"
 #include <stdlib.h>
 
 static const char *button_names[] = {"BTN_A", "BTN_B", "BTN_X", "BTN_Y"};
@@ -67,6 +69,8 @@ int main(void)
     // led_self_test();
     // audio_self_test();
     display_self_test();
+
+    reaction_run();
 
     printf("[MAIN] Entering main loop.\n");
     while (true)
