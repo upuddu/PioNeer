@@ -2,13 +2,17 @@
 #define ADC_JOYSTICK_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
-typedef struct {
-    uint16_t x;   // 0–4095
-    uint16_t y;   // 0–4095
+typedef struct
+{
+    uint16_t x;
+    uint16_t y;
 } JoystickReading;
 
 void joystick_init(void);
 JoystickReading joystick_read(void);
+void joystick_sw_init(void);
+bool joystick_sw_consume(void); // returns true once per press, clears flag
 
-#endif // ADC_JOYSTICK_H
+#endif
