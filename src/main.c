@@ -64,9 +64,9 @@ int main(void)
     printf("[INIT] Audio...\n");
     init_pwm_audio();
 
-    // led_self_test();
+     led_self_test();
     // audio_self_test();
-    display_self_test();
+    //display_self_test();
 
     printf("[MAIN] Entering main loop.\n");
     while (true)
