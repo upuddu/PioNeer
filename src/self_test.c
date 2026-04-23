@@ -7,6 +7,7 @@
 #include "hardware/spi.h"
 #include "lvgl/lvgl.h"
 #include "lvgl/src/drivers/display/st7796/lv_st7796.h"
+#include "lvgl/src/drivers/display/st7796/lv_st7796.h"
 #include <stdlib.h>
 
 void led_self_test(void)
@@ -188,7 +189,7 @@ void display_self_test(void)
     lv_tick_set_cb(my_tick_get_cb);
     lv_delay_set_cb(my_delay_cb);
 
-    lv_display_t *disp = lv_st7796_create(LCD_HEIGHT, LCD_WIDTH, LV_LCD_FLAG_NONE, send_cmd_cb, send_color_cb);
+    lv_display_t *disp = lv_st7796_create(LCD_HEIGHT, LCD_WIDTH, 0, send_cmd_cb, send_color_cb);
     lv_display_set_rotation(disp, LV_DISPLAY_ROTATION_270);
 
     uint32_t buf_size = LCD_WIDTH * LCD_HEIGHT * 2 / 10;

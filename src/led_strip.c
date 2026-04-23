@@ -10,7 +10,8 @@
 #include "ws2812.pio.h"
 #include "config.h"
 #include "led_strip.h"
-
+#include <stdio.h>
+#include <stdlib.h>
 typedef struct
 {
     uint8_t r;

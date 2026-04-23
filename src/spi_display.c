@@ -7,6 +7,7 @@
 
 // LVGL specific dependencies
 #include "lvgl.h"
+#include "lvgl/src/drivers/display/st7796/lv_st7796.h"
 
 // ── LVGL Callbacks ────────────────────────────────────────────────────────────
 
@@ -89,7 +90,7 @@ void display_init(void)
     sleep_ms(200);
 
     // LVGL ST7796 Display creation
-    lv_display_t *disp = lv_st7796_create(LCD_HEIGHT, LCD_WIDTH, LV_LCD_FLAG_NONE, display_send_cmd, display_send_color);
+    lv_display_t *disp = lv_st7796_create(LCD_HEIGHT, LCD_WIDTH, 0, display_send_cmd, display_send_color);
     lv_display_set_rotation(disp, LV_DISPLAY_ROTATION_270);
 
     // Allocate draw buffers (e.g. 1/10 of the screen size)

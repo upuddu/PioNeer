@@ -355,6 +355,8 @@
             "defines": [
                 "PLATFORMIO=60119",
                 "LV_CONF_INCLUDE_SIMPLE",
+                "LV_USE_ST7796=1",
+                "LV_USE_GENERIC_MIPI=1",
                 "F_CPU=150000000L",
                 "PICO_RP2350=1",
                 "PICO_RISCV=0",
