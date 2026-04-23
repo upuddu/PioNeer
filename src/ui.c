@@ -183,14 +183,42 @@ static void update_cursor(int prev, int next)
 // ── Launch selected game ─────────────────────────────────────────────────────
 static void launch_game(int game)
 {
-    printf("[MENU] Launching: %s\n", game_names[game]);
+    printf("[MENU] Loading: %s\n", game_names[game]);
     
-    // TODO: Implement game launcher
-    // For now, just print that we would run the game
-    // In a real implementation, this would:
-    // - Load the game from SD card
-    // - Execute it as a function or subprocess
-    // - Return control here when done
+    // Construct full path
+    char path[256];
+    snprintf(path, sizeof(path), "0:/games/%s", game_names[game]);
+    
+    // Allocate buffer for game binary
+    uint8_t *game_buffer = (uint8_t *)malloc(512 * 1024);  // 512KB buffer
+    if (game_buffer == NULL)
+    {
+        printf("[MENU] ERROR: Memory allocation failed\n");
+        return;
+    }
+    
+    // Read game binary from SD card
+    size_t bytes_read = 0;
+    if (!sd_card_read_file(path, game_buffer, 512 * 1024, &bytes_read))
+    {
+        printf("[MENU] ERROR: Failed to load %s\n", game_names[game]);
+        free(game_buffer);
+        return;
+    }
+    
+    printf("[MENU] Loaded %u bytes, executing...\n", (unsigned)bytes_read);
+    
+    // Cast buffer to function pointer and call
+    typedef void (*GameFunc)(void);
+    GameFunc game_entry = (GameFunc)game_buffer;
+    
+    // Execute the game
+    game_entry();
+    
+    printf("[MENU] Game returned, back to menu\n");
+    
+    // Free game memory
+    free(game_buffer);
 }
 
 // ── Reset menu to first game ──────────────────────────────────────────────────
