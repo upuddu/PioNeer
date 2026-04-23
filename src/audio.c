@@ -13,6 +13,41 @@ int offset1 = 0;
 int volume = 2400;
 WaveformType current_waveform = WAVE_SINE;
 
+// ── PCM sample playback state (read/written from IRQ; use volatile) ──
+// NOTE: the pointer itself must be volatile so the IRQ always re-reads it.
+static const uint8_t * volatile s_sample_data = 0;
+static volatile uint32_t s_sample_len = 0;    // total samples in the buffer
+static volatile uint32_t s_sample_phase = 0;  // 16.16 fixed-point index
+static volatile uint32_t s_sample_step  = 0;  // phase increment per IRQ tick
+static volatile bool     s_sample_active = false;
+
+void play_sample(const uint8_t *data, uint32_t length, uint32_t sample_rate)
+{
+    if (!data || length == 0) return;
+
+    // Stop any existing sample playback before swapping pointers.
+    s_sample_active = false;
+
+    // ALSO mute the wavetable oscillators so they cannot bleed through
+    // — this guarantees the sample is the only thing you hear.
+    step0 = 0; offset0 = 0;
+    step1 = 0; offset1 = 0;
+
+    s_sample_phase = 0;
+    // Phase increment so that sample_rate Hz advance 1 index per PWM tick (RATE Hz).
+    // step = (sample_rate / RATE) * 65536, computed as 64-bit to avoid overflow.
+    s_sample_step = (uint32_t)(((uint64_t)sample_rate << 16) / (uint64_t)RATE);
+    s_sample_data = data;
+    s_sample_len  = length;
+    __asm volatile ("" ::: "memory");  // compiler barrier
+    s_sample_active = true;
+}
+
+bool sample_is_playing(void)
+{
+    return s_sample_active;
+}
+
 // ── Wavetable generators ───────────────────────────────────────────
 void init_wavetable(void)
 {
@@ -92,14 +127,34 @@ static void pwm_audio_handler(void)
 
     pwm_hw->intr = 1u << slice_num;
 
-    offset0 += step0;
-    offset1 += step1;
-    if (offset0 >= (N << 16))
-        offset0 -= (N << 16);
-    if (offset1 >= (N << 16))
-        offset1 -= (N << 16);
+    uint32_t samp;
 
-    uint32_t samp = ((uint32_t)wavetable[offset0 >> 16] + (uint32_t)wavetable[offset1 >> 16]) / 2;
+    if (s_sample_active) {
+        // ── Sample playback path ──
+        s_sample_phase += s_sample_step;
+        uint32_t idx = s_sample_phase >> 16;
+        if (idx >= s_sample_len) {
+            // Done — stop and fall back to silence this tick.
+            s_sample_active = false;
+            samp = 16384; // midpoint (silence)
+        } else {
+            // 8-bit unsigned sample (0..255, centered at 128) → 0..32767 scale
+            // matching the wavetable range used below.
+            uint32_t s = s_sample_data[idx];
+            samp = s << 7; // 0..32640
+        }
+    } else {
+        // ── Wavetable oscillator path (unchanged) ──
+        offset0 += step0;
+        offset1 += step1;
+        if (offset0 >= (N << 16))
+            offset0 -= (N << 16);
+        if (offset1 >= (N << 16))
+            offset1 -= (N << 16);
+
+        samp = ((uint32_t)wavetable[offset0 >> 16] + (uint32_t)wavetable[offset1 >> 16]) / 2;
+    }
+
     samp = (samp * (pwm_hw->slice[slice_num].top + 1)) >> 16;
 
     uint32_t keep_mask = 0xffff << (16 * (!channel_num));

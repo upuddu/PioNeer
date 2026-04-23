@@ -3,6 +3,7 @@
 
 #include <math.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #define N 2000
 #define RATE 80000
@@ -34,6 +35,15 @@ void init_wavetable_triangle(void);
 // Audio control
 void set_waveform(WaveformType wave);
 void set_freq(int chan, float f);
+
+// PCM sample playback (non-blocking). Plays `data` through the same PWM output.
+// Samples are 8-bit unsigned (128 = silence). While a sample is playing,
+// the wavetable oscillators are muted so the sample is not corrupted.
+// Calling while another sample is playing replaces it immediately.
+void play_sample(const uint8_t *data, uint32_t length, uint32_t sample_rate);
+
+// Returns true while a sample is still being streamed to the PWM.
+bool sample_is_playing(void);
 
 // PWM hardware
 void init_pwm_audio(void);
