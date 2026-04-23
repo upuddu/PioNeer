@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <math.h>
+#include <stdlib.h>
 #include "pico/stdlib.h"
 #include "config.h"
 #include "adc_joystick.h"
@@ -11,7 +12,7 @@
 #include "hardware/spi.h"
 #include "lvgl/lvgl.h"
 #include "lvgl/src/drivers/display/st7796/lv_st7796.h"
-#include <stdlib.h>
+#include "ui.h"
 
 static const char *button_names[] = {"BTN_A", "BTN_B", "BTN_X", "BTN_Y"};
 
@@ -67,6 +68,8 @@ int main(void)
     // led_self_test();
     // audio_self_test();
     display_self_test();
+
+    main_menu_init();
 
     printf("[MAIN] Entering main loop.\n");
     while (true)
