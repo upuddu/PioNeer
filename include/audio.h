@@ -4,7 +4,7 @@
 #include <math.h>
 #include <stdint.h>
 
-#define N 2000
+#define N 4000
 #define RATE 80000
 
 extern short int wavetable[N]; // defined in audio.c, not here

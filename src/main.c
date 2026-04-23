@@ -11,7 +11,6 @@
 #include "hardware/spi.h"
 #include "lvgl/lvgl.h"
 #include "lvgl/src/drivers/display/st7796/lv_st7796.h"
-#include "snake.h"
 #include "reaction.h"
 #include <stdlib.h>
 
