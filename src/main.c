@@ -28,6 +28,11 @@ int main(void) {
     lv_label_set_text(label2, "SPI OK");
     lv_obj_set_style_text_color(label2, lv_color_hex(0x00FF00), LV_PART_MAIN);
     lv_obj_align(label2, LV_ALIGN_CENTER, 0, 20);
+    
+    lv_obj_t * label3 = lv_label_create(scr);
+    lv_label_set_text(label3, "we made it");
+    lv_obj_set_style_text_color(label3, lv_color_hex(0xFF00FF), LV_PART_MAIN);
+    lv_obj_align(label3, LV_ALIGN_CENTER, 0, 60);
 
     // Main loop
     while (true) {

@@ -35,9 +35,12 @@ static void display_send_color(lv_display_t *disp, const uint8_t *cmd, size_t cm
     
     gpio_put(SPI_CS_PIN, 1);
     
-    // For blocking transfer, we must tell LVGL that we are ready
+    /* For blocking transfer, we must tell LVGL that we are ready */
     lv_display_flush_ready(disp);
 }
+
+
+ 
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
