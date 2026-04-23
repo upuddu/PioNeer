@@ -1,126 +1,127 @@
-#include "config.h"
-#include "hardware/gpio.h"
-#include "hardware/spi.h"
-#include "lvgl/lvgl.h"
-#include "lvgl/src/drivers/display/st7796/lv_st7796.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
-#include <stdlib.h>
+#include <string.h>
+#include "config.h"
+#include "sd_api.h"
+#include "hardware/timer.h"
+#include "hardware/sync.h"
+#include "pico/util/datetime.h"
+#include "pico/aon_timer.h"
 
-static void send_cmd_cb(lv_display_t *disp,
-                        const uint8_t *cmd,  uint32_t cmd_len,
-                        const uint8_t *param, uint32_t param_len)
-{
-    gpio_put(SPI_DC_PIN, 0);  // command mode
-    gpio_put(SPI_CS_PIN, 0);
-    spi_write_blocking(SPI_PORT, cmd, cmd_len);
+#define TEST_FILE "test.dat"
+#define DATA_SIZE (64 * 1024) // 64 KB test file
 
-    if (param && param_len) {
-        gpio_put(SPI_DC_PIN, 1);  // data mode
-        spi_write_blocking(SPI_PORT, param, param_len);
+uint8_t write_buf[DATA_SIZE];
+uint8_t read_buf[DATA_SIZE];
+
+static volatile bool timer_fired = false;
+static void alarm_irq(uint alarm_num) {
+    timer_fired = true;
+}
+
+// Puts the RP2350 to sleep until a specific time elapses
+void sleep_and_wake(uint32_t ms) {
+    timer_fired = false;
+    int alarm_num = hardware_alarm_claim_unused(true);
+    if (alarm_num < 0) {
+        printf("Failed to claim hardware alarm!\n");
+        sleep_ms(ms);
+        return;
     }
-    gpio_put(SPI_CS_PIN, 1);
-}
-
-static void send_color_cb(lv_display_t *disp,
-                          const uint8_t *cmd,   uint32_t cmd_len,
-                          uint8_t       *color, uint32_t color_len)
-{
-    gpio_put(SPI_DC_PIN, 0);
-    gpio_put(SPI_CS_PIN, 0);
-    spi_write_blocking(SPI_PORT, cmd, cmd_len);
-
-    gpio_put(SPI_DC_PIN, 1);
-
-    // Swap bytes for 16-bit color in-place (ST7796 expects MSB first, Pico is little-endian)
-    for (uint32_t i = 0; i < color_len; i += 2) {
-        uint8_t temp = color[i];
-        color[i] = color[i + 1];
-        color[i + 1] = temp;
+    
+    hardware_alarm_set_callback(alarm_num, alarm_irq);
+    hardware_alarm_set_target(alarm_num, make_timeout_time_ms(ms));
+    printf("Going to sleep for %u ms (WFI)...\n", (unsigned int)ms);
+    
+    // Sleep loop: CPU sleeps via WFI, wakes up on ANY interrupt (like USB),
+    // and goes back to sleep if our timer hasn't fired yet.
+    while (!timer_fired) {
+        __wfi(); // Wait for Interrupt
     }
-
-    spi_write_blocking(SPI_PORT, color, color_len);
-    gpio_put(SPI_CS_PIN, 1);
-
-    lv_display_flush_ready(disp);  // tell LVGL we're done
-}
-
-static uint32_t my_tick_get_cb(void) {
-    return (uint32_t)to_ms_since_boot(get_absolute_time());
-}
-
-static void my_delay_cb(uint32_t ms) {
-    sleep_ms(ms);
-}
-
-static void btn_event_cb(lv_event_t * e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t * btn = lv_event_get_target_obj(e);
-    if(code == LV_EVENT_CLICKED) {
-        static uint8_t cnt = 0;
-        cnt++;
-
-        printf("Button clicked! Count: %d\n", cnt);
-
-        /*Get the first child of the button which is the label and change its text*/
-        lv_obj_t * label = lv_obj_get_child(btn, 0);
-        lv_label_set_text_fmt(label, "Button: %d", cnt);
-    }
-}
-
-void lv_example_get_started_2(void)
-{
-    lv_obj_t * btn = lv_button_create(lv_screen_active());     /*Add a button the current screen*/
-    lv_obj_set_pos(btn, 10, 10);                            /*Set its position*/
-    lv_obj_set_size(btn, 120, 50);                          /*Set its size*/
-    lv_obj_add_event_cb(btn, btn_event_cb, LV_EVENT_ALL, NULL);           /*Assign a callback to the button*/
-
-    lv_obj_t * label = lv_label_create(btn);          /*Add a label to the button*/
-    lv_label_set_text(label, "Button");                     /*Set the labels text*/
-    lv_obj_center(label);
+    
+    printf("Woke up from timer interrupt!\n");
+    hardware_alarm_set_callback(alarm_num, NULL);
+    hardware_alarm_unclaim(alarm_num);
 }
 
 int main(void) {
     stdio_init_all();
 
-    // SPI hardware init
-    spi_init(SPI_PORT, SPI_BAUD_HZ);
-    spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-    gpio_set_function(SPI_MOSI_PIN, GPIO_FUNC_SPI);
-    gpio_set_function(SPI_CLK_PIN,  GPIO_FUNC_SPI);
-    // gpio_set_function(SPI_MISO_PIN, GPIO_FUNC_SPI); // Optional if MISO isn't used
+    // Give some time for USB serial to connect
+    sleep_ms(3000);
 
-    // Control pins as GPIO outputs
-    gpio_init(SPI_CS_PIN);   gpio_set_dir(SPI_CS_PIN, GPIO_OUT);   gpio_put(SPI_CS_PIN, 1);
-    gpio_init(SPI_DC_PIN);   gpio_set_dir(SPI_DC_PIN, GPIO_OUT);   gpio_put(SPI_DC_PIN, 1);
-    gpio_init(SPI_RST_PIN);  gpio_set_dir(SPI_RST_PIN, GPIO_OUT);  gpio_put(SPI_RST_PIN, 1);
-    gpio_init(SPI_BL_PIN);   gpio_set_dir(SPI_BL_PIN, GPIO_OUT);   gpio_put(SPI_BL_PIN, 1);
+    printf("==========================================\n");
+    printf(" PioNeer SD Card High-Speed Test Start \n");
+    printf("==========================================\n");
 
-    // Hardware reset sequence
-    gpio_put(SPI_RST_PIN, 1); sleep_ms(50);
-    gpio_put(SPI_RST_PIN, 0); sleep_ms(200);
-    gpio_put(SPI_RST_PIN, 1); sleep_ms(200);
+    if (!sd_card_init()) {
+        printf("SD Card initialization failed.\n");
+        while(1) sleep_ms(1000);
+    }
+    printf("SD Card mounted successfully.\n");
 
-    lv_init();
-    lv_tick_set_cb(my_tick_get_cb);
-    lv_delay_set_cb(my_delay_cb);
+    // Populate write buffer with a predictable pattern
+    printf("Generating %u bytes of test data...\n", DATA_SIZE);
+    for (size_t i = 0; i < DATA_SIZE; i++) {
+        write_buf[i] = (uint8_t)(i & 0xFF);
+    }
 
-    // Create display with LVGL ST7796 driver
-    // ST7796 panels are natively 320x480 (Portrait). We define it as such, then rotate it.
-    lv_display_t *disp = lv_st7796_create(LCD_HEIGHT, LCD_WIDTH, LV_LCD_FLAG_NONE, send_cmd_cb, send_color_cb);
-    lv_display_set_rotation(disp, LV_DISPLAY_ROTATION_270);
+    // 1. Measure Write Speed
+    printf("\nWriting %u bytes to %s...\n", DATA_SIZE, TEST_FILE);
+    uint32_t start_us = time_us_32();
+    if (sd_card_write_file(TEST_FILE, write_buf, DATA_SIZE)) {
+        uint32_t end_us = time_us_32();
+        uint32_t duration_us = end_us - start_us;
+        float speed_kbps = ((float)DATA_SIZE / 1024.0f) / ((float)duration_us / 1000000.0f);
+        printf("Write complete in %u us. Speed: %.2f KB/s\n", (unsigned int)duration_us, speed_kbps);
+    } else {
+        printf("Write failed!\n");
+    }
 
-    // Allocate draw buffers (1/10 of screen size)
-    uint32_t buf_size = LCD_WIDTH * LCD_HEIGHT * 2 / 10;
-    void * buf1 = malloc(buf_size);
-    void * buf2 = malloc(buf_size);
-    lv_display_set_buffers(disp, buf1, buf2, buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    // 2. Sleep & Wake Test
+    printf("\nUnmounting SD card for sleep...\n");
+    sd_card_deinit(); 
+    sleep_and_wake(5000); // Sleep for 5 seconds
+    printf("Remounting SD card...\n");
+    sd_card_init();   
 
-    lv_example_get_started_2();
+    // 3. Measure Read Speed
+    printf("\nReading %u bytes from %s...\n", DATA_SIZE, TEST_FILE);
+    size_t bytes_read = 0;
+    start_us = time_us_32();
+    if (sd_card_read_file(TEST_FILE, read_buf, DATA_SIZE, &bytes_read)) {
+        uint32_t end_us = time_us_32();
+        uint32_t duration_us = end_us - start_us;
+        float speed_kbps = ((float)bytes_read / 1024.0f) / ((float)duration_us / 1000000.0f);
+        printf("Read %u bytes complete in %u us. Speed: %.2f KB/s\n", (unsigned int)bytes_read, (unsigned int)duration_us, speed_kbps);
+    } else {
+        printf("Read failed!\n");
+    }
+
+    // 4. Verify Data Integrity
+    printf("\nVerifying data integrity...\n");
+    bool match = true;
+    for (size_t i = 0; i < DATA_SIZE; i++) {
+        if (write_buf[i] != read_buf[i]) {
+            printf("Mismatch at index %zu: Expected %02X, Got %02X\n", i, write_buf[i], read_buf[i]);
+            match = false;
+            break;
+        }
+    }
+
+    if (match) {
+        printf("SUCCESS! All data matches perfectly.\n");
+    } else {
+        printf("FAILURE! Data corruption detected.\n");
+    }
+
+    // Cleanup test file
+    sd_card_delete(TEST_FILE);
+    printf("Test complete. Entering infinite loop.\n");
 
     while (1) {
-        lv_timer_handler();
-        sleep_ms(1);
+        sleep_ms(1000);
     }
+
+    return 0;
 }

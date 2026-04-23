@@ -3,23 +3,13 @@
 
 #include "pico/stdlib.h"
 
-/*
-TODO: THE PIN NUMBERS NEED TO BE UPDATED.
-    THEY ARE ALL CURRENTLY PLACEHOLDERS.
-*/
+// ─── SD Card SPI Configuration
+// ────────────────────────────────────────────────
+#define SD_SPI_PORT spi1
+#define SD_CS_PIN 25
+#define SD_MOSI_PIN 27
+#define SD_MISO_PIN 24
+#define SD_CLK_PIN 26
+#define SD_SPI_BAUD (10 * 1000 * 1000)
 
-// ─── TFT LCD (SPI0)
-// ───────────────────────────────────────────────────────────
-#define SPI_PORT spi0
-#define SPI_CS_PIN 17                 // GPIO17_SPI0_CS check
-#define SPI_DC_PIN 22                 // GPIO21 (DC/RS) check
-#define SPI_RST_PIN 21                // GPIO22 (RST) check
-#define SPI_MOSI_PIN 19               // GPIO19_SPI0_TX check
-#define SPI_CLK_PIN 18                // GPIO18_SPI0_SCK check
-#define SPI_MISO_PIN 16               // GPIO16_SPI0_RX check
-#define SPI_BL_PIN 20                 // GPIO20 (LED/backlight)
-#define SPI_BAUD_HZ (40 * 1000 * 1000) // 40MHz for high speed
-#define LCD_WIDTH 480
-#define LCD_HEIGHT 320
-
-#endif
+#endif // CONFIG_H

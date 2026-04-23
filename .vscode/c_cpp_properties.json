@@ -8,11 +8,13 @@
         {
             "name": "PlatformIO",
             "includePath": [
-                "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/lvgl",
-                "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/lvgl/src",
+                "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src",
+                "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/include",
+                "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src/sd_driver",
+                "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src/include",
+                "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src/ff15/source",
                 "/Users/umbertopuddu/PioNeer/include",
                 "/Users/umbertopuddu/PioNeer/src",
-                "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton",
                 "/Users/umbertopuddu/.platformio/packages/framework-picosdk/generated",
                 "/Users/umbertopuddu/PioNeer/.pio/build/proton/generated",
                 "/Users/umbertopuddu/.platformio/packages/framework-picosdk/src/boards/include",
@@ -181,11 +183,13 @@
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
-                    "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/lvgl",
-                    "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/lvgl/src",
+                    "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src",
+                    "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/include",
+                    "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src/sd_driver",
+                    "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src/include",
+                    "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src/ff15/source",
                     "/Users/umbertopuddu/PioNeer/include",
                     "/Users/umbertopuddu/PioNeer/src",
-                    "/Users/umbertopuddu/PioNeer/.pio/libdeps/proton",
                     "/Users/umbertopuddu/.platformio/packages/framework-picosdk/generated",
                     "/Users/umbertopuddu/PioNeer/.pio/build/proton/generated",
                     "/Users/umbertopuddu/.platformio/packages/framework-picosdk/src/boards/include",
@@ -354,7 +358,6 @@
             },
             "defines": [
                 "PLATFORMIO=60119",
-                "LV_CONF_INCLUDE_SIMPLE",
                 "F_CPU=150000000L",
                 "PICO_RP2350=1",
                 "PICO_RISCV=0",
