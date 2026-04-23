@@ -1,16 +1,15 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "config.h"
-#include "gpio_buttons.h"
 #include "led_strip.h"
 
 int main(void) {
     stdio_init_all();
 
-    // Init WS2812B LED strip on GPIO9 (20 LEDs)
+    // Init WS2812B LED strip on GPIO9 (10 LEDs)
     led_strip_init();
 
-    printf("System started. Buttons + LED strip ready.\n");
+    printf("System started. LED strip ready.\n");
 
     // Visible boot self-test loop:
     // - solid colors
@@ -78,6 +77,7 @@ int main(void) {
         led_strip_random_fill();  // Random colors
         led_strip_show();
         sleep_ms(2000);
+
     }
 
     return 0;
