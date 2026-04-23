@@ -45,8 +45,20 @@ static void display_send_color(lv_display_t *disp, const uint8_t *cmd, size_t cm
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+static uint32_t systick_get_cb(void) {
+    return (uint32_t)to_ms_since_boot(get_absolute_time());
+}
+
+static void sysdelay_cb(uint32_t ms) {
+    sleep_ms(ms);
+}
+
 void display_init(void)
 {
+    // Initialize LVGL core
+    lv_init();
+    lv_tick_set_cb(systick_get_cb);
+    lv_delay_set_cb(sysdelay_cb);
     // SPI peripheral init
     spi_init(SPI_PORT, SPI_BAUD_HZ);
     spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
@@ -77,7 +89,8 @@ void display_init(void)
     sleep_ms(200);
 
     // LVGL ST7796 Display creation
-    lv_display_t *disp = lv_st7796_create(LCD_WIDTH, LCD_HEIGHT, LV_LCD_FLAG_NONE, display_send_cmd, display_send_color);
+    lv_display_t *disp = lv_st7796_create(LCD_HEIGHT, LCD_WIDTH, LV_LCD_FLAG_NONE, display_send_cmd, display_send_color);
+    lv_display_set_rotation(disp, LV_DISPLAY_ROTATION_270);
 
     // Allocate draw buffers (e.g. 1/10 of the screen size)
     uint32_t buf_size = LCD_WIDTH * LCD_HEIGHT * 2 / 10;
