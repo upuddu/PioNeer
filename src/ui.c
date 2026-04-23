@@ -1,40 +1,119 @@
 #include "ui.h"
 #include "adc_joystick.h"
 #include "gpio_buttons.h"
-#include "lvgl.h"
+#include "sd_api.h"
+#include "lvgl/lvgl.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-// ── Game list ─────────────────────────────────────────────────────────────────
-#define NUM_GAMES 9
+// ── Game list (dynamically loaded from SD card) ────────────────────────────────
+#define MAX_GAMES 256
 
-static const char *game_names[NUM_GAMES] = {
-    "Game 1", "Game 2", "Game 3",
-    "Game 4", "Game 5", "Game 6",
-    "Game 7", "Game 8", "Game 9"};
-
-static const lv_color_t game_colors[NUM_GAMES] = {
-    {.red = 220, .green = 50, .blue = 50},   // red
-    {.red = 50, .green = 180, .blue = 50},   // green
-    {.red = 50, .green = 50, .blue = 220},   // blue
-    {.red = 220, .green = 150, .blue = 50},  // orange
-    {.red = 150, .green = 50, .blue = 220},  // purple
-    {.red = 50, .green = 200, .blue = 200},  // cyan
-    {.red = 220, .green = 50, .blue = 150},  // pink
-    {.red = 200, .green = 200, .blue = 50},  // yellow
-    {.red = 100, .green = 180, .blue = 100}, // mint
-};
+static char *game_names[MAX_GAMES];
+static lv_color_t game_colors[MAX_GAMES];
+static int num_games = 0;
 
 // ── State ─────────────────────────────────────────────────────────────────────
-static int selected_game = -1; // -1 = in menu
-static int cursor = 0;         // 0-8, which tile is highlighted
+static int cursor = 0;         // which tile is highlighted
 
 // ── LVGL objects ─────────────────────────────────────────────────────────────
 static lv_obj_t *menu_screen = NULL;
-static lv_obj_t *select_screen = NULL;
-static lv_obj_t *select_label = NULL;
-static lv_obj_t *tiles[NUM_GAMES];
-static lv_obj_t *tile_labels[NUM_GAMES];
+static lv_obj_t *tiles[MAX_GAMES];
+static lv_obj_t *tile_labels[MAX_GAMES];
+
+// ── Generate colors for games ─────────────────────────────────────────────────
+static lv_color_t generate_color(int index)
+{
+    static const lv_color_t base_colors[] = {
+        {.red = 220, .green = 50, .blue = 50},   // red
+        {.red = 50, .green = 180, .blue = 50},   // green
+        {.red = 50, .green = 50, .blue = 220},   // blue
+        {.red = 220, .green = 150, .blue = 50},  // orange
+        {.red = 150, .green = 50, .blue = 220},  // purple
+        {.red = 50, .green = 200, .blue = 200},  // cyan
+        {.red = 220, .green = 50, .blue = 150},  // pink
+        {.red = 200, .green = 200, .blue = 50},  // yellow
+        {.red = 100, .green = 180, .blue = 100}, // mint
+    };
+    static const int num_colors = sizeof(base_colors) / sizeof(base_colors[0]);
+    return base_colors[index % num_colors];
+}
+
+// ── Load games from SD card ───────────────────────────────────────────────────
+static bool load_games_from_sd(void)
+{
+    sd_file_info_t *file_list = NULL;
+    size_t file_count = 0;
+
+    printf("[UI] Loading games from SD card...\n");
+
+    // Initialize SD card if not already done
+    if (!sd_card_init())
+    {
+        printf("[UI] ERROR: Failed to initialize SD card\n");
+        return false;
+    }
+
+    // Check if games directory exists
+    if (!sd_card_exists("0:/games"))
+    {
+        printf("[UI] ERROR: games/ directory not found on SD card\n");
+        return false;
+    }
+
+    // Read directory contents
+    if (!sd_card_get_dir_contents("0:/games", &file_list, &file_count))
+    {
+        printf("[UI] ERROR: Failed to read games directory\n");
+        return false;
+    }
+
+    if (file_count == 0)
+    {
+        printf("[UI] ERROR: No games found in games/ directory\n");
+        sd_card_free_dir_contents(file_list);
+        return false;
+    }
+
+    // Filter out directories, keep only files
+    int game_idx = 0;
+    for (size_t i = 0; i < file_count && game_idx < MAX_GAMES; i++)
+    {
+        if (!file_list[i].is_dir)
+        {
+            // Allocate memory for game name
+            size_t name_len = strlen(file_list[i].name) + 1;
+            game_names[game_idx] = (char *)malloc(name_len);
+            if (game_names[game_idx] == NULL)
+            {
+                printf("[UI] ERROR: Memory allocation failed\n");
+                break;
+            }
+            strcpy(game_names[game_idx], file_list[i].name);
+            game_colors[game_idx] = generate_color(game_idx);
+            game_idx++;
+        }
+    }
+
+    num_games = game_idx;
+    sd_card_free_dir_contents(file_list);
+
+    if (num_games == 0)
+    {
+        printf("[UI] ERROR: No game files found (only directories?)\n");
+        return false;
+    }
+
+    printf("[UI] Loaded %d games from SD card\n", num_games);
+    for (int i = 0; i < num_games; i++)
+    {
+        printf("  [%d] %s\n", i, game_names[i]);
+    }
+
+    return true;
+}
 
 // ── Build menu screen ─────────────────────────────────────────────────────────
 static void build_menu_screen(void)
@@ -49,19 +128,29 @@ static void build_menu_screen(void)
     lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 8);
 
-    // 3x3 grid of tiles
-    // 480 wide, 320 tall, title takes ~40px
-    // each tile: ~150x85
+    // Calculate grid dimensions based on game count
+    // Start with 3 columns, calculate rows needed
+    int cols = (num_games <= 3) ? num_games : 3;
+    int rows = (num_games + cols - 1) / cols; // ceiling division
+
+    // Adjust tile size based on number of rows
     int tile_w = 148;
     int tile_h = 83;
     int x_start = 6;
     int y_start = 44;
     int gap = 6;
 
-    for (int i = 0; i < NUM_GAMES; i++)
+    // If we have many rows, shrink tiles
+    if (rows > 3)
     {
-        int row = i / 3;
-        int col = i % 3;
+        tile_h = 60;
+        gap = 4;
+    }
+
+    for (int i = 0; i < num_games; i++)
+    {
+        int row = i / cols;
+        int col = i % cols;
         int x = x_start + col * (tile_w + gap);
         int y = y_start + row * (tile_h + gap);
 
@@ -80,13 +169,6 @@ static void build_menu_screen(void)
         lv_obj_set_style_text_font(tile_labels[i], &lv_font_montserrat_16, 0);
         lv_obj_center(tile_labels[i]);
     }
-
-    // Build select screen (reused for all selections)
-    select_screen = lv_obj_create(NULL);
-    select_label = lv_label_create(select_screen);
-    lv_obj_set_style_text_font(select_label, &lv_font_montserrat_32, 0);
-    lv_obj_set_style_text_color(select_label, lv_color_white(), 0);
-    lv_obj_center(select_label);
 }
 
 // ── Highlight cursor tile ─────────────────────────────────────────────────────
@@ -98,38 +180,43 @@ static void update_cursor(int prev, int next)
     cursor = next;
 }
 
-// ── Show selected game fullscreen ─────────────────────────────────────────────
-static void show_selected(int game)
+// ── Launch selected game ─────────────────────────────────────────────────────
+static void launch_game(int game)
 {
-    selected_game = game;
-    lv_obj_set_style_bg_color(select_screen, game_colors[game], 0);
-
-    char buf[32];
-    snprintf(buf, sizeof(buf), "Chosen:\n%s", game_names[game]);
-    lv_label_set_text(select_label, buf);
-    lv_obj_center(select_label);
-
-    lv_screen_load(select_screen);
-    printf("[MENU] Selected: %s\n", game_names[game]);
+    printf("[MENU] Launching: %s\n", game_names[game]);
+    
+    // TODO: Implement game launcher
+    // For now, just print that we would run the game
+    // In a real implementation, this would:
+    // - Load the game from SD card
+    // - Execute it as a function or subprocess
+    // - Return control here when done
 }
 
-// ── Back to menu ──────────────────────────────────────────────────────────────
-static void show_menu(void)
+// ── Reset menu to first game ──────────────────────────────────────────────────
+static void reset_menu(void)
 {
-    selected_game = -1;
+    cursor = 0;
+    lv_obj_set_style_border_opa(tiles[0], LV_OPA_COVER, 0);
     lv_screen_load(menu_screen);
 }
 
 // ── Public init ───────────────────────────────────────────────────────────────
 void main_menu_init(void)
 {
+    // Load games from SD card
+    if (!load_games_from_sd())
+    {
+        printf("[UI] FATAL: Could not load games from SD card\n");
+        return;
+    }
+
     build_menu_screen();
 
-    // Show menu, highlight first tile
-    lv_screen_load(menu_screen);
-    lv_obj_set_style_border_opa(tiles[0], LV_OPA_COVER, 0);
+    // Reset to first game
+    reset_menu();
 
-    printf("[MENU] Initialized.\n");
+    printf("[MENU] Initialized with %d games.\n", num_games);
 }
 
 // ── Main loop tick ────────────────────────────────────────────────────────────
@@ -150,47 +237,36 @@ void main_menu_run(void)
     int dy = (int)joy.y - 2048;
     int threshold = 800;
 
-    // ── In menu: navigate ────────────────────────────────────────────────────
-    if (selected_game == -1)
+    // Navigate menu
+    int prev = cursor;
+    int next = cursor;
+
+    // Calculate grid dimensions
+    int cols = (num_games <= 3) ? num_games : 3;
+
+    if (dx > threshold)
+        next = cursor + 1; // right
+    else if (dx < -threshold)
+        next = cursor - 1; // left
+    else if (dy > threshold)
+        next = cursor + cols; // down
+    else if (dy < -threshold)
+        next = cursor - cols; // up
+
+    // A button or joystick click = launch game
+    if (joystick_sw_consume())
     {
-        int prev = cursor;
-        int next = cursor;
-
-        if (dx > threshold)
-            next = cursor + 1; // right
-        else if (dx < -threshold)
-            next = cursor - 1; // left
-        else if (dy > threshold)
-            next = cursor + 3; // down
-        else if (dy < -threshold)
-            next = cursor - 3; // up
-
-        // A button or joystick click = select
-        if (joystick_sw_consume())
-        {
-            show_selected(cursor);
-            last_input_ms = now;
-            return;
-        }
-
-        // B button = wrap or ignore (nothing to go back to from menu)
-
-        // Clamp next to valid range
-        if (next >= 0 && next < NUM_GAMES && next != prev)
-        {
-            update_cursor(prev, next);
-            last_input_ms = now;
-        }
-
-        // ── In game screen: B = back to menu ────────────────────────────────────
+        launch_game(cursor);
+        reset_menu();
+        last_input_ms = now;
+        return;
     }
-    else
+
+    // Clamp next to valid range
+    if (next >= 0 && next < num_games && next != prev)
     {
-        if (button_get_state(BTN_B) == BTN_STATE_PRESSED)
-        {
-            show_menu();
-            last_input_ms = now;
-        }
+        update_cursor(prev, next);
+        last_input_ms = now;
     }
 
     lv_timer_handler();
