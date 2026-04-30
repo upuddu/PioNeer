@@ -27,11 +27,14 @@ static const uint32_t TURN_DURATION_MS = 30000; // 30 seconds
 
 static float cursor_x = LCD_WIDTH / 2.0f;
 static float cursor_y = LCD_HEIGHT / 2.0f;
+static float vel_x = 0;
+static float vel_y = 0;
 static float target_x = 0;
 static float target_y = 0;
 
 static int dwell_frames = 0;
 static const int DWELL_MAX = 75; // ~1.5 seconds at 50fps loop
+static bool is_drawing = false;
 
 volatile int archer_audio_state = 0; // 0=idle, 1=pulling, 2=hit, 3=win
 volatile int archer_dwell_progress = 0;
@@ -97,8 +100,11 @@ void archer_game_init(void) {
     p2_score = 0;
     cursor_x = LCD_WIDTH / 2.0f;
     cursor_y = LCD_HEIGHT / 2.0f;
+    vel_x = 0;
+    vel_y = 0;
     dwell_frames = 0;
     archer_audio_state = 0;
+    is_drawing = false;
 
     screen = lv_screen_active();
     lv_obj_clean(screen);
@@ -210,42 +216,52 @@ void archer_game_update(void) {
     if (fabs(dx) < 0.1f) dx = 0;
     if (fabs(dy) < 0.1f) dy = 0;
 
-    cursor_x += dx * 6.0f;
-    cursor_y += dy * 6.0f;
+    vel_x += dx * 0.5f;
+    vel_y += dy * 0.5f;
 
-    if (cursor_x < 10) cursor_x = 10;
-    if (cursor_x > LCD_WIDTH - 10) cursor_x = LCD_WIDTH - 10;
-    if (cursor_y < 10) cursor_y = 10;
-    if (cursor_y > LCD_HEIGHT - 10) cursor_y = LCD_HEIGHT - 10;
+    float speed = sqrtf(vel_x*vel_x + vel_y*vel_y);
+    if (speed > 8.0f) {
+        vel_x = (vel_x / speed) * 8.0f;
+        vel_y = (vel_y / speed) * 8.0f;
+    }
+
+    vel_x *= 0.98f;
+    vel_y *= 0.98f;
+
+    cursor_x += vel_x;
+    cursor_y += vel_y;
+
+    if (cursor_x < 10) { cursor_x = 10; vel_x = -vel_x * 0.5f; }
+    if (cursor_x > LCD_WIDTH - 10) { cursor_x = LCD_WIDTH - 10; vel_x = -vel_x * 0.5f; }
+    if (cursor_y < 10) { cursor_y = 10; vel_y = -vel_y * 0.5f; }
+    if (cursor_y > LCD_HEIGHT - 10) { cursor_y = LCD_HEIGHT - 10; vel_y = -vel_y * 0.5f; }
 
     lv_obj_set_pos(cursor_obj, (int)cursor_x - 10, (int)cursor_y - 10);
 
-    // Dwell check
-    float dist = sqrtf((cursor_x - target_x)*(cursor_x - target_x) + (cursor_y - target_y)*(cursor_y - target_y));
-    if (dist < 25.0f) {
-        dwell_frames++;
+    // Dwell check replaced by manual aim and draw check
+    if (is_drawing) {
+        if (dwell_frames < DWELL_MAX) {
+            dwell_frames++;
+        }
         if (archer_audio_state == 0) archer_audio_state = 1; // start pulling
         archer_dwell_progress = dwell_frames;
 
-        // Update LEDs
+        // Update LEDs - brighter and more interaction
         int leds_on = (dwell_frames * WS2812_NUM_LEDS) / DWELL_MAX;
         if (leds_on > WS2812_NUM_LEDS) leds_on = WS2812_NUM_LEDS;
         led_strip_clear();
         for (int i = 0; i < leds_on; i++) {
-            led_strip_set_pixel_color(i, COLOR_RED); // red tension
+            // Brighter LEDs: scale color intensity
+            uint8_t intensity = 50 + (205 * dwell_frames) / DWELL_MAX;
+            uint32_t color = (intensity << 16); // Red
+            if (dwell_frames >= DWELL_MAX) {
+                // When fully charged, flash yellow/white occasionally
+                if (lv_tick_get() % 100 < 50) color = 0xFFFFFF; // Brighter White flash
+                else color = 0xFFFF00; // Bright Yellow
+            }
+            led_strip_set_pixel_color(i, color);
         }
         led_strip_show();
-
-        if (dwell_frames >= DWELL_MAX) {
-            // Hit!
-            if (current_state == STATE_P1_PLAY) p1_score++;
-            else p2_score++;
-            
-            archer_audio_state = 2; // hit sound
-            spawn_target();
-            led_strip_clear();
-            led_strip_show();
-        }
     } else {
         if (dwell_frames > 0) {
             dwell_frames = 0;
@@ -257,8 +273,8 @@ void archer_game_update(void) {
 }
 
 void archer_button_callback(uint8_t btn, bool pressed) {
-    if (!pressed) return;
     if (current_state == STATE_P1_START) {
+        if (!pressed) return;
         current_state = STATE_P1_PLAY;
         turn_start_time = lv_tick_get();
         lv_obj_add_flag(info_label, LV_OBJ_FLAG_HIDDEN);
@@ -267,6 +283,7 @@ void archer_button_callback(uint8_t btn, bool pressed) {
         lv_obj_remove_flag(cursor_obj, LV_OBJ_FLAG_HIDDEN);
         spawn_target();
     } else if (current_state == STATE_P2_START) {
+        if (!pressed) return;
         current_state = STATE_P2_PLAY;
         turn_start_time = lv_tick_get();
         lv_obj_add_flag(info_label, LV_OBJ_FLAG_HIDDEN);
@@ -275,6 +292,29 @@ void archer_button_callback(uint8_t btn, bool pressed) {
         lv_obj_remove_flag(cursor_obj, LV_OBJ_FLAG_HIDDEN);
         spawn_target();
     } else if (current_state == STATE_GAME_OVER) {
+        if (!pressed) return;
         archer_game_init();
+    } else if (current_state == STATE_P1_PLAY || current_state == STATE_P2_PLAY) {
+        if (pressed) {
+            is_drawing = true;
+        } else {
+            if (is_drawing) {
+                is_drawing = false;
+                if (dwell_frames >= DWELL_MAX / 3) { // Require at least 1/3 charge
+                    float dist = sqrtf((cursor_x - target_x)*(cursor_x - target_x) + (cursor_y - target_y)*(cursor_y - target_y));
+                    if (dist < 30.0f) {
+                        if (current_state == STATE_P1_PLAY) p1_score++;
+                        else p2_score++;
+                        archer_audio_state = 2; // hit
+                        spawn_target();
+                    } else {
+                        archer_audio_state = 0; // miss
+                    }
+                }
+                dwell_frames = 0;
+                led_strip_clear();
+                led_strip_show();
+            }
+        }
     }
 }
