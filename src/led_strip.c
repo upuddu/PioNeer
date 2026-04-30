@@ -100,8 +100,8 @@ void led_strip_init(void)
 
     pio_sm_config c = ws2812_program_get_default_config(ws2812_offset);
     sm_config_set_sideset_pins(&c, WS2812_PIN);
-    // CRITICAL: shift_right=TRUE (MSB-first) for correct WS2812B bit order
-    sm_config_set_out_shift(&c, true, true, 24);
+    // CRITICAL: shift_right=FALSE (MSB-first) for correct WS2812B bit order
+    sm_config_set_out_shift(&c, false, true, 24);
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
 
     int cycles_per_bit = ws2812_T1 + ws2812_T2 + ws2812_T3;

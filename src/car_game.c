@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "led_strip.h"
 
 // Game constants
 #define LANE_WIDTH 80
@@ -47,6 +48,8 @@ typedef struct {
     int score;
     float speed;
     int invincibility;
+    int laser_timer;
+    lv_obj_t *laser_beam;
     
     Obstacle obstacles[MAX_OBSTACLES];
 } CarGameState;
@@ -84,7 +87,28 @@ void car_button_callback(uint8_t btn, bool pressed) {
         car_game_init();
         return;
     }
-    if (btn == BTN_A) car_play_sfx(1);
+    if (btn == BTN_A) {
+        car_play_sfx(1);
+        game.laser_timer = 10;
+        lv_obj_remove_flag(game.laser_beam, LV_OBJ_FLAG_HIDDEN);
+        
+        // Destroy closest obstacle in player's lane
+        float closest_y = -1000;
+        int target = -1;
+        for (int i = 0; i < MAX_OBSTACLES; i++) {
+            if (game.obstacles[i].active && game.obstacles[i].lane == game.player_lane) {
+                if (game.obstacles[i].y > closest_y && game.obstacles[i].y < 240) {
+                    closest_y = game.obstacles[i].y;
+                    target = i;
+                }
+            }
+        }
+        if (target != -1) {
+            game.obstacles[target].active = false;
+            lv_obj_add_flag(game.obstacles[target].obj, LV_OBJ_FLAG_HIDDEN);
+            game.score += 500; // Bonus points!
+        }
+    }
     else if (btn == BTN_X) { game.speed = 12.0f; game.invincibility = 60; car_play_sfx(4); }
 }
 
@@ -121,6 +145,14 @@ void car_game_init(void) {
         int lane_idx = (i < 3) ? 1 : 2;
         lv_obj_set_pos(game.dividers[i], lane_idx * LANE_WIDTH - 2, (i % 3) * 120);
     }
+
+    // Laser Beam (Hidden initially)
+    game.laser_beam = lv_obj_create(game.road);
+    lv_obj_set_size(game.laser_beam, 10, 240); // Long beam
+    lv_obj_set_style_bg_color(game.laser_beam, lv_color_hex(0x00FFFF), 0); // Cyan
+    lv_obj_set_style_bg_opa(game.laser_beam, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(game.laser_beam, 0, 0);
+    lv_obj_add_flag(game.laser_beam, LV_OBJ_FLAG_HIDDEN);
 
     // Player Car
     game.player = lv_obj_create(game.road);
@@ -167,6 +199,13 @@ void car_game_init(void) {
         core1_launched = true;
     }
     update_hud();
+    
+    // Initialize LEDs for the game
+    led_strip_clear();
+    for(int i = 0; i < game.lives && i < WS2812_NUM_LEDS; i++) {
+        led_strip_set_pixel(i, 0, 255, 0); // Green for lives
+    }
+    led_strip_show();
 }
 
 void car_game_update(void) {
@@ -184,6 +223,15 @@ void car_game_update(void) {
 
     int px = game.player_lane * LANE_WIDTH + (LANE_WIDTH - CAR_WIDTH) / 2;
     lv_obj_set_pos(game.player, px, 240);
+
+    // Laser Beam position
+    if (game.laser_timer > 0) {
+        lv_obj_set_pos(game.laser_beam, px + (CAR_WIDTH - 10) / 2, 0);
+        game.laser_timer--;
+        if (game.laser_timer == 0) {
+            lv_obj_add_flag(game.laser_beam, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
 
     // Scrolling
     game.score++;
@@ -243,6 +291,7 @@ void car_game_update(void) {
                     game.obstacles[i].active = false;
                     lv_obj_add_flag(game.obstacles[i].obj, LV_OBJ_FLAG_HIDDEN);
                     update_hud();
+                    
                     if (game.lives <= 0) {
                         game.state = GAME_STATE_GAME_OVER;
                         lv_obj_remove_flag(game.game_over_panel, LV_OBJ_FLAG_HIDDEN);
@@ -253,4 +302,54 @@ void car_game_update(void) {
         }
     }
     update_hud();
+
+    // --- Update LEDs to Match Game Logic ---
+    if (game.state == GAME_STATE_GAME_OVER) {
+        led_strip_set_all_color(COLOR_RED);
+        led_strip_show();
+    } else if (game.laser_timer > 0) {
+        // Laser blast! Entire strip flashes Cyan and White
+        if (game.laser_timer % 2 == 0) {
+            led_strip_set_all_color(COLOR_CYAN);
+        } else {
+            led_strip_set_all_color(COLOR_WHITE);
+        }
+        led_strip_show();
+    } else if (game.invincibility > 0) {
+        // Rainbow effect when boosting or invincible after a crash
+        led_strip_fill_rainbow((game.score * 15) % 256, 25);
+        led_strip_show();
+    } else {
+        led_strip_clear();
+        
+        // Map the 3 road lanes to the 10-LED strip
+        // Lane 0: 0-2, Lane 1: 3-6, Lane 2: 7-9
+        const int lane_starts[3] = {0, 3, 7};
+        const int lane_ends[3] = {2, 6, 9};
+
+        // 1. Show Player's Car position (Cyan/Blue base)
+        for (int i = lane_starts[game.player_lane]; i <= lane_ends[game.player_lane]; i++) {
+            led_strip_set_pixel(i, 0, 100, 255);
+        }
+
+        // 2. Radar Warning System: Show incoming obstacles
+        for (int o = 0; o < MAX_OBSTACLES; o++) {
+            if (game.obstacles[o].active) {
+                int l = game.obstacles[o].lane;
+                float y = game.obstacles[o].y;
+                if (y > 0 && y < 240) {
+                    // Danger level from 0.0 (far) to 1.0 (close)
+                    float danger = y / 240.0f; 
+                    uint8_t r = 255;
+                    uint8_t g = (uint8_t)(255.0f * (1.0f - danger)); // Yellow to Red
+                    
+                    // Display the warning on the corresponding lane's LEDs
+                    for (int i = lane_starts[l]; i <= lane_ends[l]; i++) {
+                        led_strip_set_pixel(i, r, g, 0);
+                    }
+                }
+            }
+        }
+        led_strip_show();
+    }
 }
