@@ -13,7 +13,7 @@
 #include "lvgl/src/drivers/display/st7796/lv_st7796.h"
 #include <stdlib.h>
 #include "spi_display.h"
-#include "car_game.h"
+#include "audio_maze.h"
 
 static const char *button_names[] = {"BTN_A", "BTN_B", "BTN_X", "BTN_Y"};
 
@@ -22,8 +22,8 @@ void button_event_handler(Button btn, ButtonState state)
     const char *state_str = (state == BTN_STATE_PRESSED) ? "pressed" : "released";
     printf("[BUTTONS] %s %s\n", button_names[btn], state_str);
     
-    // Pass to Car Game
-    car_button_callback((uint8_t)btn, (state == BTN_STATE_PRESSED));
+    // Pass to Audio Maze
+    audio_maze_button_callback((uint8_t)btn, (state == BTN_STATE_PRESSED));
 }
 
 static void joystick_poll(void)
@@ -72,14 +72,14 @@ int main(void)
     printf("[INIT] Display & LVGL...\n");
     display_init();
 
-    printf("\n=== CAR GAME START ===\n");
-    car_game_init();
+    printf("\n=== AUDIO MAZE START ===\n");
+    audio_maze_init();
 
     printf("[MAIN] Entering main loop.\n");
     while (true)
     {
         joystick_poll();
-        car_game_update();
+        audio_maze_update();
         lv_timer_handler(); // Necessary for LVGL drawing to execute
         sleep_ms(20);       // Faster render loop for smoother gameplay!
     }
