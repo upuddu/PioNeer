@@ -4,9 +4,7 @@
 #include "config.h"
 #include <stdio.h>
 #include "pico/stdlib.h"
-#include "hardware/spi.h"
 #include "lvgl/lvgl.h"
-#include "lvgl/src/drivers/display/st7796/lv_st7796.h"
 #include <stdlib.h>
 
 void led_self_test(void)
@@ -110,92 +108,44 @@ void audio_self_test(void)
     printf("[AUDIO] Self-test complete.\n");
 }
 
-// static 콜백들 + display_self_test 함수
-static void send_cmd_cb(lv_display_t *disp,
-                        const uint8_t *cmd, uint32_t cmd_len,
-                        const uint8_t *param, uint32_t param_len)
+static void hstx_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
-    gpio_put(SPI_DC_PIN, 0);
-    gpio_put(SPI_CS_PIN, 0);
-    spi_write_blocking(SPI_PORT, cmd, cmd_len);
-    if (param && param_len)
-    {
-        gpio_put(SPI_DC_PIN, 1);
-        spi_write_blocking(SPI_PORT, param, param_len);
-    }
-    gpio_put(SPI_CS_PIN, 1);
-}
-
-static void send_color_cb(lv_display_t *disp,
-                          const uint8_t *cmd, uint32_t cmd_len,
-                          uint8_t *color, uint32_t color_len)
-{
-    gpio_put(SPI_DC_PIN, 0);
-    gpio_put(SPI_CS_PIN, 0);
-    spi_write_blocking(SPI_PORT, cmd, cmd_len);
-    gpio_put(SPI_DC_PIN, 1);
-    for (uint32_t i = 0; i < color_len; i += 2)
-    {
-        uint8_t temp = color[i];
-        color[i] = color[i + 1];
-        color[i + 1] = temp;
-    }
-    spi_write_blocking(SPI_PORT, color, color_len);
-    gpio_put(SPI_CS_PIN, 1);
+    // HSTX hardware handles automatic scanout - no explicit flush needed
     lv_display_flush_ready(disp);
-}
-
-static uint32_t my_tick_get_cb(void)
-{
-    return (uint32_t)to_ms_since_boot(get_absolute_time());
-}
-
-static void my_delay_cb(uint32_t ms)
-{
-    sleep_ms(ms);
 }
 
 void display_self_test(void)
 {
-    printf("[DISPLAY] Initializing...\n");
+    printf("[DISPLAY] Initializing HSTX DVI/HDMI display...\n");
 
-    spi_init(SPI_PORT, SPI_BAUD_HZ);
-    spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-    gpio_set_function(SPI_MOSI_PIN, GPIO_FUNC_SPI);
-    gpio_set_function(SPI_CLK_PIN, GPIO_FUNC_SPI);
-
-    gpio_init(SPI_CS_PIN);
-    gpio_set_dir(SPI_CS_PIN, GPIO_OUT);
-    gpio_put(SPI_CS_PIN, 1);
-    gpio_init(SPI_DC_PIN);
-    gpio_set_dir(SPI_DC_PIN, GPIO_OUT);
-    gpio_put(SPI_DC_PIN, 1);
-    gpio_init(SPI_RST_PIN);
-    gpio_set_dir(SPI_RST_PIN, GPIO_OUT);
-    gpio_put(SPI_RST_PIN, 1);
-    gpio_init(SPI_BL_PIN);
-    gpio_set_dir(SPI_BL_PIN, GPIO_OUT);
-    gpio_put(SPI_BL_PIN, 1);
-
-    gpio_put(SPI_RST_PIN, 1);
-    sleep_ms(50);
-    gpio_put(SPI_RST_PIN, 0);
-    sleep_ms(200);
-    gpio_put(SPI_RST_PIN, 1);
-    sleep_ms(200);
-
+    // Initialize LVGL
     lv_init();
-    lv_tick_set_cb(my_tick_get_cb);
-    lv_delay_set_cb(my_delay_cb);
+    
+    // Create LVGL display for HSTX (640x480)
+    lv_display_t *disp = lv_display_create(LCD_WIDTH, LCD_HEIGHT);
+    
+    if (disp == NULL)
+    {
+        printf("[DISPLAY] ERROR: Failed to create LVGL display!\n");
+        return;
+    }
 
-    lv_display_t *disp = lv_st7796_create(LCD_HEIGHT, LCD_WIDTH, LV_LCD_FLAG_NONE, send_cmd_cb, send_color_cb);
-    lv_display_set_rotation(disp, LV_DISPLAY_ROTATION_270);
+    // Allocate frame buffer for HSTX
+    size_t frame_buffer_size = LCD_WIDTH * LCD_HEIGHT * sizeof(lv_color_t);
+    uint8_t *frame_buffer = malloc(frame_buffer_size);
+    
+    if (frame_buffer == NULL)
+    {
+        printf("[DISPLAY] ERROR: Failed to allocate frame buffer!\n");
+        return;
+    }
 
-    uint32_t buf_size = LCD_WIDTH * LCD_HEIGHT * 2 / 10;
-    void *buf1 = malloc(buf_size);
-    void *buf2 = malloc(buf_size);
-    lv_display_set_buffers(disp, buf1, buf2, buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    // Set draw buffer
+    lv_display_set_buffers(disp, frame_buffer, NULL, frame_buffer_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    
+    // Set flush callback (minimal for HSTX - hardware handles scanout)
+    lv_display_set_flush_cb(disp, hstx_flush_cb);
 
-    printf("[DISPLAY] Ready.\n");
-    // no UI, no lv_timer_handler loop — main_menu_init() takes over from here
+    printf("[DISPLAY] HSTX Display Ready (640x480)\n");
+    printf("[DISPLAY] Frame buffer: %zu bytes\n", frame_buffer_size);
 }

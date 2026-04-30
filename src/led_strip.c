@@ -117,7 +117,7 @@ void led_strip_init(void)
     led_strip_clear();
     led_strip_show();
 
-    printf("LED strip initialized on GPIO%d (MSB-first PIO shift)\n", WS2812_PIN);
+    printf("LED strip initialized on GPIO%d with config.h setting\n", WS2812_PIN);
 }
 
 void led_strip_set_brightness(uint8_t brightness)

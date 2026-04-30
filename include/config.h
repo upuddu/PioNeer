@@ -7,42 +7,37 @@
 #define M_PI 3.141592f
 #endif
 
-// ─── GPIO BUTTONS (XYAB) ──────────────────────────────────────────────────────
-#define BTN_A_PIN 36 // check
-#define BTN_B_PIN 37 // check
-#define BTN_X_PIN 34 // check
-#define BTN_Y_PIN 35 // check
+// ─── I2C JOYSTICK (ADAFRUIT 5743 - STEMMA QT) ────────────────────────────────
+#define I2C_PORT i2c1
+#define I2C_SDA_PIN 2  // GPIO2
+#define I2C_SCL_PIN 3  // GPIO3
+#define I2C_FREQ 400000 // 400kHz standard I2C
+#define JOYSTICK_I2C_ADDR 0x50 // Adafruit 5743 default I2C address
 
-// ─── JOYSTICK (ADC) ───────────────────────────────────────────────────────────
-#define JOYSTICK_X_PIN 40 // ADC channel 0 check
-#define JOYSTICK_Y_PIN 41 // ADC channel 1 check
-#define JOYSTICK_X_CH 0
-#define JOYSTICK_Y_CH 1
-#define JOYSTICK_SW_PIN 39
+// ─── BUTTONS (From I2C Joystick) ──────────────────────────────────────────────
+// Adafruit 5743 provides 4 buttons (A, B, X, Y) over I2C
+// No GPIO pins needed, all data comes from I2C
 
-// ─── TFT LCD (SPI0) ───────────────────────────────────────────────────────────
-#define SPI_PORT spi0
-#define SPI_CS_PIN 17                  // GPIO17_SPI0_CS check
-#define SPI_DC_PIN 22                  // GPIO21 (DC/RS) check
-#define SPI_RST_PIN 21                 // GPIO22 (RST) check
-#define SPI_MOSI_PIN 19                // GPIO19_SPI0_TX check
-#define SPI_CLK_PIN 18                 // GPIO18_SPI0_SCK check
-#define SPI_MISO_PIN 16                // GPIO16_SPI0_RX check
-#define SPI_BL_PIN 20                  // GPIO20 (LED/backlight)
-#define SPI_BAUD_HZ (40 * 1000 * 1000) // 40MHz for high speed
-#define LCD_WIDTH 480
-#define LCD_HEIGHT 320
+// ─── JOYSTICK (From I2C) ──────────────────────────────────────────────────────
+// X and Y axes read from Adafruit 5743 over I2C
+// No ADC pins needed
+
+// ─── HSTX DVI/HDMI DISPLAY (22-pin breakout) ──────────────────────────────────
+// RP2350A has dedicated HSTX pins (GPIO0-23 reserved for video output)
+// No explicit pin configuration needed - HSTX uses fixed pins
+#define HSTX_ENABLED 1
+#define LCD_WIDTH 640
+#define LCD_HEIGHT 480
 
 // ─── AUDIO (PWM) ─────────────────────────────────────────────────────────────
 #define AUDIO_PIN 38 // GP38 → PWM, through 4-stage filter to speaker check
 
 // ─── WS2812B LED STRIP ────────────────────────────────────────────────────────
-#define WS2812_PIN 9
+#define WS2812_PIN 21
 #define WS2812_NUM_LEDS 10
 
 // ─── DISPLAY DIMENSIONS ───────────────────────────────────────────────────────
-#define LCD_WIDTH 480
-#define LCD_HEIGHT 320
+// Set above for HSTX (640x480)
 
 // ─── SD CARD (SPI1) ───────────────────────────────────────────────────────────
 #define SD_SPI_PORT spi1

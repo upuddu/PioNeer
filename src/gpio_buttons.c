@@ -1,101 +1,111 @@
 #include "gpio_buttons.h"
 #include "config.h"
-#include "hardware/gpio.h"
-#include "hardware/timer.h"
+#include "hardware/i2c.h"
+#include "pico/stdlib.h"
+#include <stdio.h>
 
-static const uint BTN_PINS[] = {
-    BTN_A_PIN, BTN_B_PIN, BTN_X_PIN, BTN_Y_PIN};
+/**
+ * GPIO Buttons Interface Implementation using I2C Joystick (Adafruit 5743)
+ * Maintains compatible API with original GPIO-based implementation
+ */
 
-// History byte for debouncing: 0xFF = pressed, 0x00 = released
-static uint8_t btn_history[4] = {0};
+// Button register state caching
+static uint8_t last_button_state = 0xFF; // All released (active-low)
 static ButtonState btn_state[4] = {BTN_STATE_UNKNOWN, BTN_STATE_UNKNOWN, BTN_STATE_UNKNOWN, BTN_STATE_UNKNOWN};
 static button_callback_t btn_callback = NULL;
 
-// Timer callback for debounce sampling
-static int64_t debounce_callback(alarm_id_t id, void *user_data)
+#define REG_BUTTONS 0x04  // Adafruit 5743 button register
+#define I2C_READ_RETRIES 3
+
+/**
+ * Read button state from I2C joystick
+ */
+static uint8_t read_button_register(void)
 {
+    uint8_t reg = REG_BUTTONS;
+    uint8_t buttons = 0xFF;  // Default: all released
+    
+    for (int retry = 0; retry < I2C_READ_RETRIES; retry++)
+    {
+        int result = i2c_write_blocking(I2C_PORT, JOYSTICK_I2C_ADDR, &reg, 1, true);
+        if (result == PICO_ERROR_GENERIC)
+        {
+            sleep_ms(5);
+            continue;
+        }
+        
+        result = i2c_read_blocking(I2C_PORT, JOYSTICK_I2C_ADDR, &buttons, 1, false);
+        if (result == PICO_ERROR_GENERIC)
+        {
+            sleep_ms(5);
+            continue;
+        }
+        return buttons;
+    }
+    
+    return buttons;
+}
+
+/**
+ * Poll button states and fire callbacks on changes
+ */
+static int64_t button_poll_callback(alarm_id_t id, void *user_data)
+{
+    uint8_t current_state = read_button_register();
+    
+    // Adafruit 5743 button mapping (active-low):
+    // Bit 7: SELECT button
+    // Bit 6: Button A
+    // Bit 5: Button B
+    // Bit 4: Button X
+    // Bit 3: Button Y
+    
+    static const uint8_t button_bits[] = {6, 5, 4, 3};  // A, B, X, Y
+    
     for (int i = 0; i < 4; i++)
     {
-        uint gpio = BTN_PINS[i];
-        uint raw_state = (sio_hw->gpio_hi_in & (1u << (gpio - 32))) ? 1 : 0;
-
-        // Shift history byte: 1 = not pressed (HIGH), 0 = pressed (LOW)
-        // Active-high with pull-down: unpressed=HIGH(1), pressed=LOW(0)
-        btn_history[i] = (btn_history[i] << 1) | raw_state;
-
-        // Check for state change (all bits must agree)
-        ButtonState new_state = BTN_STATE_UNKNOWN;
-        if (btn_history[i] == 0x00)
+        uint8_t bit_mask = (1 << button_bits[i]);
+        bool is_pressed = !(current_state & bit_mask);  // Active-low logic
+        
+        ButtonState new_state = is_pressed ? BTN_STATE_PRESSED : BTN_STATE_RELEASED;
+        
+        // Trigger callback on state change
+        if (btn_state[i] != new_state && btn_state[i] != BTN_STATE_UNKNOWN)
         {
-            // All zeros = all pressed (LOW) = PRESSED
-            new_state = BTN_STATE_PRESSED;
-        }
-        else if (btn_history[i] == 0xFF)
-        {
-            // All ones = all unpressed (HIGH) = RELEASED
-            new_state = BTN_STATE_RELEASED;
-        }
-
-        // Call callback on state change
-        if (new_state != BTN_STATE_UNKNOWN && new_state != btn_state[i])
-        {
-            btn_state[i] = new_state;
             if (btn_callback)
             {
                 btn_callback((Button)i, new_state);
             }
         }
+        
+        btn_state[i] = new_state;
     }
-
-    // Reschedule debounce check (every 5ms)
-    return 5000; // 5ms in microseconds
-}
-
-static void gpio_interrupt_handler(uint gpio, uint32_t events)
-{
-    if (gpio == JOYSTICK_SW_PIN)
-    {
-        joystick_sw_isr(); // delegate to joystick handler
-    }
-    // Interrupt triggered, debounce sampling will handle state detection
-    // This just ensures we start sampling on any edge
+    
+    // Reschedule polling (every 50ms)
+    return 50000;  // 50ms in microseconds
 }
 
 void buttons_init(void)
 {
-    // Initialize GPIO inputs
+    printf("[BUTTONS] Initializing I2C button interface via Adafruit 5743\n");
+    
+    // Initial read to set current state
+    uint8_t initial_state = read_button_register();
+    last_button_state = initial_state;
+    
+    static const uint8_t button_bits[] = {6, 5, 4, 3};
+    
     for (int i = 0; i < 4; i++)
     {
-        uint gpio = BTN_PINS[i];
-        uint32_t mask = 1u << (gpio & 0x1fu);
-
-        // Set as input (clear output enable)
-        sio_hw->gpio_hi_oe_clr = mask;
-
-        // Enable input, disable output driver
-        hw_write_masked(&pads_bank0_hw->io[gpio],
-                        PADS_BANK0_GPIO0_IE_BITS,
-                        PADS_BANK0_GPIO0_IE_BITS | PADS_BANK0_GPIO0_OD_BITS);
-
-        // Set function to SIO
-        io_bank0_hw->io[gpio].ctrl = 5u << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB;
-
-        // Clear isolation bit
-        hw_clear_bits(&pads_bank0_hw->io[gpio], PADS_BANK0_GPIO0_ISO_BITS);
+        uint8_t bit_mask = (1 << button_bits[i]);
+        bool is_pressed = !(initial_state & bit_mask);
+        btn_state[i] = is_pressed ? BTN_STATE_PRESSED : BTN_STATE_RELEASED;
     }
-
-    // Set up GPIO interrupt handler FIRST before enabling interrupts
-    gpio_set_irq_callback(gpio_interrupt_handler);
-    irq_set_enabled(IO_IRQ_BANK0, true);
-
-    // Now enable GPIO interrupt on all button pins (both edges for robust detection)
-    for (int i = 0; i < 4; i++)
-    {
-        gpio_set_irq_enabled(BTN_PINS[i], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
-    }
-
-    // Start debounce timer (5ms interval)
-    add_alarm_in_ms(5, debounce_callback, NULL, false);
+    
+    // Start periodic polling
+    add_alarm_in_ms(50, button_poll_callback, NULL, false);
+    
+    printf("[BUTTONS] I2C button polling started\n");
 }
 
 void buttons_set_callback(button_callback_t callback)
@@ -105,5 +115,9 @@ void buttons_set_callback(button_callback_t callback)
 
 ButtonState button_get_state(Button btn)
 {
+    if (btn >= 4)
+        return BTN_STATE_UNKNOWN;
+    
     return btn_state[btn];
 }
+

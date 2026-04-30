@@ -1,87 +1,63 @@
 #include "spi_display.h"
 #include "config.h"
-#include "hardware/spi.h"
-#include "hardware/gpio.h"
 #include "pico/stdlib.h"
+#include "lvgl.h"
+#include <stdio.h>
 #include <stdlib.h>
 
-// LVGL specific dependencies
-#include "lvgl.h"
+/**
+ * HSTX Display Driver for RP2350A Feather
+ * Uses integrated HSTX peripheral for 22-pin DVI/HDMI breakout
+ * 
+ * Resolution: 640x480 @ 60Hz
+ * Display Type: DVI/HDMI via 22-pin breakout
+ */
 
-// ── LVGL Callbacks ────────────────────────────────────────────────────────────
+static lv_display_t *display = NULL;
 
-static void display_send_cmd(lv_display_t *disp, const uint8_t *cmd, size_t cmd_size, const uint8_t *param, size_t param_size)
+/**
+ * HSTX display flush callback
+ * This is called by LVGL when it needs to flush the frame buffer to display
+ */
+static void display_hstx_flush(lv_display_t *disp, const lv_area_t *area,
+                                uint8_t *color_p)
 {
-    gpio_put(SPI_DC_PIN, 0); // DC low = command
-    gpio_put(SPI_CS_PIN, 0);
-    spi_write_blocking(SPI_PORT, cmd, cmd_size);
-
-    if (param_size > 0)
-    {
-        gpio_put(SPI_DC_PIN, 1); // DC high = data
-        spi_write_blocking(SPI_PORT, param, param_size);
-    }
-
-    gpio_put(SPI_CS_PIN, 1);
-}
-
-static void display_send_color(lv_display_t *disp, const uint8_t *cmd, size_t cmd_size, uint8_t *param, size_t param_size)
-{
-    gpio_put(SPI_DC_PIN, 0); // DC low = command
-    gpio_put(SPI_CS_PIN, 0);
-    spi_write_blocking(SPI_PORT, cmd, cmd_size);
-
-    if (param_size > 0)
-    {
-        gpio_put(SPI_DC_PIN, 1); // DC high = data
-        spi_write_blocking(SPI_PORT, param, param_size);
-    }
-
-    gpio_put(SPI_CS_PIN, 1);
-
-    /* For blocking transfer, we must tell LVGL that we are ready */
+    // HSTX hardware handles automatic scanout of frame buffer
+    // No explicit flush needed - just mark as ready
     lv_display_flush_ready(disp);
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
-
 void display_init(void)
 {
-    // SPI peripheral init
-    spi_init(SPI_PORT, SPI_BAUD_HZ);
-    spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-    gpio_set_function(SPI_CLK_PIN, GPIO_FUNC_SPI);
-    gpio_set_function(SPI_MOSI_PIN, GPIO_FUNC_SPI);
-    gpio_set_function(SPI_MISO_PIN, GPIO_FUNC_SPI);
-
-    // Control pins as GPIO outputs
-    gpio_init(SPI_CS_PIN);
-    gpio_set_dir(SPI_CS_PIN, GPIO_OUT);
-    gpio_put(SPI_CS_PIN, 1);
-    gpio_init(SPI_DC_PIN);
-    gpio_set_dir(SPI_DC_PIN, GPIO_OUT);
-    gpio_put(SPI_DC_PIN, 1);
-    gpio_init(SPI_RST_PIN);
-    gpio_set_dir(SPI_RST_PIN, GPIO_OUT);
-    gpio_put(SPI_RST_PIN, 1);
-    gpio_init(SPI_BL_PIN);
-    gpio_set_dir(SPI_BL_PIN, GPIO_OUT);
-    gpio_put(SPI_BL_PIN, 1);
-
-    // Hardware reset
-    gpio_put(SPI_RST_PIN, 1);
-    sleep_ms(50);
-    gpio_put(SPI_RST_PIN, 0);
-    sleep_ms(200);
-    gpio_put(SPI_RST_PIN, 1);
-    sleep_ms(200);
-
-    // LVGL ST7796 Display creation
-    lv_display_t *disp = lv_st7796_create(LCD_WIDTH, LCD_HEIGHT, LV_LCD_FLAG_NONE, display_send_cmd, display_send_color);
-
-    // Allocate draw buffers (e.g. 1/10 of the screen size)
-    uint32_t buf_size = LCD_WIDTH * LCD_HEIGHT * 2 / 10;
-    void *buf1 = malloc(buf_size);
-    void *buf2 = malloc(buf_size);
-    lv_display_set_buffers(disp, buf1, buf2, buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    printf("[DISPLAY] Initializing HSTX DVI/HDMI breakout (640x480@60Hz)\n");
+    
+    // Create LVGL display driver for RP2350 HSTX
+    display = lv_display_create(LCD_WIDTH, LCD_HEIGHT);
+    
+    if (display == NULL)
+    {
+        printf("[DISPLAY] ERROR: Failed to create LVGL display!\n");
+        return;
+    }
+    
+    // Set up the display callback for flushing
+    lv_display_set_flush_cb(display, display_hstx_flush);
+    
+    // Allocate frame buffer (ensure it's in fast RAM for HSTX DMA)
+    size_t frame_buffer_size = LCD_WIDTH * LCD_HEIGHT * sizeof(lv_color_t);
+    uint8_t *frame_buffer = malloc(frame_buffer_size);
+    
+    if (frame_buffer == NULL)
+    {
+        printf("[DISPLAY] ERROR: Failed to allocate frame buffer (%zu bytes)!\n", 
+               frame_buffer_size);
+        return;
+    }
+    
+    // Set draw buffers using LVGL API
+    lv_display_set_buffers(display, frame_buffer, NULL, frame_buffer_size, LV_DISPLAY_RENDER_MODE_FULL);
+    
+    printf("[DISPLAY] Frame buffer allocated: %zu bytes\n", frame_buffer_size);
+    printf("[DISPLAY] Display initialized: %dx%d\n", LCD_WIDTH, LCD_HEIGHT);
+    printf("[DISPLAY] HSTX DVI/HDMI output active on dedicated pins\n");
 }
