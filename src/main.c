@@ -14,6 +14,19 @@
 #include <stdlib.h>
 #include "spi_display.h"
 #include "gravity_runner.h"
+#include "pico/multicore.h"
+#include "pico/mutex.h"
+
+auto_init_mutex(lvgl_mutex);
+
+static void core1_lvgl_task(void) {
+    while (true) {
+        mutex_enter_blocking(&lvgl_mutex);
+        lv_timer_handler();
+        mutex_exit(&lvgl_mutex);
+        sleep_ms(5);
+    }
+}
 
 static const char *button_names[] = {"BTN_A", "BTN_B", "BTN_X", "BTN_Y"};
 
@@ -75,12 +88,16 @@ int main(void)
     printf("\n=== GRAVITY RUNNER START ===\n");
     gravity_runner_init();
 
+    printf("[MAIN] Launching LVGL core1 task.\n");
+    multicore_launch_core1(core1_lvgl_task);
+
     printf("[MAIN] Entering main loop.\n");
     while (true)
     {
+        mutex_enter_blocking(&lvgl_mutex);
         joystick_poll();
         gravity_runner_update();
-        lv_timer_handler(); // Necessary for LVGL drawing to execute
+        mutex_exit(&lvgl_mutex);
         sleep_ms(20);       // Faster render loop for smoother gameplay!
     }
     return 0;

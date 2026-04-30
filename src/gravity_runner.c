@@ -12,7 +12,7 @@
 
 #define NUM_SEGMENTS 12
 #define TUNNEL_RADIUS 50.0f
-#define FOV 200.0f
+#define FOV 6.0f
 #define SEGMENT_SPACING 15.0f
 
 typedef struct {
@@ -33,6 +33,10 @@ static float player_vy = 0.0f;
 
 static bool game_over = false;
 static int score = 0;
+
+static bool pending_jump = false;
+static bool pending_flip = false;
+static bool pending_restart = false;
 
 static lv_obj_t *screen;
 static lv_obj_t *score_label;
@@ -180,9 +184,31 @@ static void draw_tunnel(void) {
 }
 
 void gravity_runner_update(void) {
-    if (game_over) return;
+    if (pending_restart) {
+        pending_restart = false;
+        gravity_runner_init();
+        return;
+    }
 
-    float dt = 0.05f; 
+    if (game_over) {
+        pending_jump = false;
+        pending_flip = false;
+        return;
+    }
+
+    if (pending_flip) {
+        pending_flip = false;
+        target_rot_idx += 2; 
+        player_x_pos = -player_x_pos; 
+    }
+    if (pending_jump) {
+        pending_jump = false;
+        if (player_y_pos <= 0.1f) {
+            player_vy = 12.0f;
+        }
+    }
+
+    float dt = 0.05f;  
     distance_traveled += current_speed * dt;
     current_speed += 0.005f; // accelerate slowly
 
@@ -264,18 +290,13 @@ void gravity_runner_button_callback(uint8_t btn, bool pressed) {
     if (!pressed) return;
     
     if (game_over) {
-        gravity_runner_init();
+        pending_restart = true;
         return;
     }
 
     if (btn == BTN_A) {
-        // Gravity flip
-        target_rot_idx += 2; 
-        player_x_pos = -player_x_pos; 
+        pending_flip = true;
     } else if (btn == BTN_B || btn == BTN_X || btn == BTN_Y) {
-        // Jump
-        if (player_y_pos <= 0.1f) {
-            player_vy = 12.0f;
-        }
+        pending_jump = true;
     }
 }
