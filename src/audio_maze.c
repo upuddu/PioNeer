@@ -133,7 +133,7 @@ void audio_maze_init(void) {
     lv_obj_set_size(overlay, LCD_WIDTH, LCD_HEIGHT);
     lv_obj_set_pos(overlay, 0, 0);
     lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(overlay, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_opa(overlay, LV_OPA_0, 0);
     lv_obj_set_style_border_width(overlay, 0, 0);
     lv_obj_set_style_radius(overlay, 0, 0);
 
@@ -215,7 +215,6 @@ void audio_maze_update(void) {
     if (current_tile == G) {
         maze_player_state = 2;
         lv_obj_remove_flag(win_label, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_style_bg_opa(overlay, LV_OPA_0, 0); // Reveal maze on win
     } else if (current_tile == R || current_tile == S) {
         maze_player_state = 1;
     } else {
@@ -227,11 +226,6 @@ void audio_maze_update(void) {
     if (maze_player_state != 2) {
         if (illumination_timer > 0) {
             illumination_timer--;
-            // Target opacity: from 100 (visible) to 255 (black)
-            int opa = 255 - (illumination_timer * 4); 
-            if (opa < 100) opa = 100;
-            if (opa > 255) opa = 255;
-            lv_obj_set_style_bg_opa(overlay, opa, 0);
 
             if (!led_was_on) {
                 led_strip_set_all(20, 20, 20); // Dull white
@@ -239,8 +233,6 @@ void audio_maze_update(void) {
                 led_was_on = true;
             }
         } else {
-            lv_obj_set_style_bg_opa(overlay, LV_OPA_COVER, 0);
-
             if (led_was_on) {
                 led_strip_clear();
                 led_strip_show();
