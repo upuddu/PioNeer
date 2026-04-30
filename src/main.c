@@ -4,8 +4,8 @@
  * Proof-of-life approach: WS2812B blinks FIRST (no serial needed),
  * then serial opens, then I2C, then I2S.
  *
- * Serial:   USB CDC (open the port in your terminal)
- * UART alt: GPIO0 TX / GPIO1 RX, 115200 baud (debug probe)
+ * Serial: UART on GPIO0 TX / GPIO1 RX, 115200 baud (debug probe)
+ *          Connect Debug Probe: TX(orange)->GPIO1, RX(yellow)->GPIO0, GND->GND
  *
  * LED colour key (GPIO21 WS2812B):
  *   BLUE pulsing  → alive, before serial
@@ -107,8 +107,7 @@ int main(void)
     // ── STEP 1: UART + USB CDC stdio ──────────────────────────────────
     // Both UART (GPIO0/1) and USB CDC are enabled so you can use either.
     stdio_uart_init_full(uart0, 115200, 0, 1);
-    stdio_usb_init();
-    sleep_ms(300);  // let USB enumerate
+    sleep_ms(200);
 
     printf("\n\n");
     printf("=========================================\n");
@@ -150,6 +149,61 @@ int main(void)
     buttons_init();
     buttons_set_callback(button_event);
     printf("[3] Joystick + buttons ready.\n\n");
+
+    // ── I2C DIAGNOSTIC ─────────────────────────────────────────────────
+    // Probe address 0x50 with multiple strategies to identify the protocol.
+    printf("[DIAG] === I2C raw probe of 0x%02X ===\n", JOYSTICK_I2C_ADDR);
+    {
+        uint8_t buf[4] = {0};
+        int r;
+
+        // 1) Plain read — no register write first
+        r = i2c_read_blocking(I2C_PORT, JOYSTICK_I2C_ADDR, buf, 4, false);
+        printf("[DIAG] Plain read 4B: ret=%d  [%02X %02X %02X %02X]\n",
+               r, buf[0], buf[1], buf[2], buf[3]);
+
+        // 2) Single-byte register write (current protocol) + read
+        uint8_t reg = 0x00;
+        r = i2c_write_blocking(I2C_PORT, JOYSTICK_I2C_ADDR, &reg, 1, true);
+        printf("[DIAG] Write reg 0x00: ret=%d (%s)\n", r, r < 0 ? "NACK/ERR" : "ACK");
+        if (r >= 0) {
+            r = i2c_read_blocking(I2C_PORT, JOYSTICK_I2C_ADDR, buf, 2, false);
+            printf("[DIAG] Read 2B after: ret=%d  [%02X %02X]\n", r, buf[0], buf[1]);
+        }
+
+        // 3) Seesaw 2-byte write [module, fn] — Adafruit 5743 if seesaw-based
+        // SEESAW_ANALOG_BASE=0x09, channel offset 0x04 = X axis
+        uint8_t ss[2] = {0x09, 0x04};
+        r = i2c_write_blocking(I2C_PORT, JOYSTICK_I2C_ADDR, ss, 2, false);
+        printf("[DIAG] Seesaw [0x09,0x04] write: ret=%d (%s)\n",
+               r, r < 0 ? "NACK/ERR" : "ACK");
+        sleep_ms(1);
+        if (r >= 0) {
+            r = i2c_read_blocking(I2C_PORT, JOYSTICK_I2C_ADDR, buf, 2, false);
+            printf("[DIAG] Seesaw read 2B: ret=%d  [%02X %02X] => %d\n",
+                   r, buf[0], buf[1], (buf[0] << 8) | buf[1]);
+        }
+
+        // 4) Seesaw Y axis: [0x09, 0x05]
+        ss[1] = 0x05;
+        r = i2c_write_blocking(I2C_PORT, JOYSTICK_I2C_ADDR, ss, 2, false);
+        sleep_ms(1);
+        if (r >= 0) {
+            r = i2c_read_blocking(I2C_PORT, JOYSTICK_I2C_ADDR, buf, 2, false);
+            printf("[DIAG] Seesaw [0x09,0x05] Y: ret=%d  [%02X %02X] => %d\n",
+                   r, buf[0], buf[1], (buf[0] << 8) | buf[1]);
+        }
+
+        // 5) Seesaw status/HW ID: [0x00, 0x01]
+        ss[0] = 0x00; ss[1] = 0x01;
+        r = i2c_write_blocking(I2C_PORT, JOYSTICK_I2C_ADDR, ss, 2, false);
+        sleep_ms(1);
+        if (r >= 0) {
+            r = i2c_read_blocking(I2C_PORT, JOYSTICK_I2C_ADDR, buf, 1, false);
+            printf("[DIAG] Seesaw HW ID [0x00,0x01]: ret=%d  [%02X]\n", r, buf[0]);
+        }
+    }
+    printf("[DIAG] === End I2C probe ===\n\n");
 
     // ── STEP 5: I2S audio (TLV320DAC3100, PIO1) ───────────────────────
     printf("[4] Initializing I2S audio (DAC @ 0x%02X, PIO1)...\n",
@@ -221,8 +275,8 @@ int main(void)
             ButtonState bx = button_get_state(BTN_X);
             ButtonState by = button_get_state(BTN_Y);
 
-            printf("[JOY] #%-4lu  X=%+6d  Y=%+6d  SW=%d  |  A=%d B=%d X=%d Y=%d\n",
-                   loop_n++, jx, jy, (int)sw,
+            printf("[JOY] #%-4lu  raw X=0x%04X Y=0x%04X  |  X=%+6d  Y=%+6d  SW=%d  |  A=%d B=%d X=%d Y=%d\n",
+                   loop_n++, joy.x, joy.y, jx, jy, (int)sw,
                    ba == BTN_STATE_PRESSED ? 1 : 0,
                    bb == BTN_STATE_PRESSED ? 1 : 0,
                    bx == BTN_STATE_PRESSED ? 1 : 0,
@@ -244,9 +298,7 @@ int main(void)
                 b = b > 15 ? b - 15 : 0;
                 led_strip_set_pixel(i, r, g, b);
             }
-            // Head pixel — rainbow colour
-            uint8_t hr, hg, hb;
-            // simple HSV→RGB (s=255, v=180)
+            // Head pixel — rainbow colour (s=255, v=180)
             led_strip_set_pixel_hsv(chase_pos, hue, 255, 180);
             chase_pos = (chase_pos + 1) % WS2812_NUM_LEDS;
             hue += 3;
@@ -264,6 +316,9 @@ int main(void)
             led_strip_show();
             sleep_ms(1000);
         }
+
+        // Poll button states (fires callbacks on change) — main-thread safe
+        buttons_poll();
 
         sleep_ms(5);
     }

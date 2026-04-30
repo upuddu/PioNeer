@@ -47,65 +47,61 @@ static uint8_t read_button_register(void)
 }
 
 /**
- * Poll button states and fire callbacks on changes
+ * Poll button states and fire callbacks on changes.
+ * Call this from the main loop — NOT from any interrupt / alarm context.
+ * Rate-limited internally to at most once every 50 ms so it doesn’t
+ * flood the I2C bus between joystick reads.
  */
-static int64_t button_poll_callback(alarm_id_t id, void *user_data)
+void buttons_poll(void)
 {
+    static uint32_t last_poll_ms = 0;
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    if (now - last_poll_ms < 50) return;   // rate-limit: max 20 Hz
+    last_poll_ms = now;
+
     uint8_t current_state = read_button_register();
-    
+
     // Adafruit 5743 button mapping (active-low):
     // Bit 7: SELECT button
-    // Bit 6: Button A
-    // Bit 5: Button B
-    // Bit 4: Button X
-    // Bit 3: Button Y
-    
+    // Bit 6: Button A  Bit 5: Button B  Bit 4: Button X  Bit 3: Button Y
     static const uint8_t button_bits[] = {6, 5, 4, 3};  // A, B, X, Y
-    
+
     for (int i = 0; i < 4; i++)
     {
-        uint8_t bit_mask = (1 << button_bits[i]);
-        bool is_pressed = !(current_state & bit_mask);  // Active-low logic
-        
+        uint8_t bit_mask = (1u << button_bits[i]);
+        bool is_pressed = !(current_state & bit_mask);  // active-low
+
         ButtonState new_state = is_pressed ? BTN_STATE_PRESSED : BTN_STATE_RELEASED;
-        
-        // Trigger callback on state change
+
         if (btn_state[i] != new_state && btn_state[i] != BTN_STATE_UNKNOWN)
         {
             if (btn_callback)
-            {
                 btn_callback((Button)i, new_state);
-            }
         }
-        
+
         btn_state[i] = new_state;
     }
-    
-    // Reschedule polling (every 50ms)
-    return 50000;  // 50ms in microseconds
 }
 
 void buttons_init(void)
 {
     printf("[BUTTONS] Initializing I2C button interface via Adafruit 5743\n");
-    
-    // Initial read to set current state
+
+    // Initial read to establish baseline state (safe — we're in thread context)
     uint8_t initial_state = read_button_register();
     last_button_state = initial_state;
-    
+
     static const uint8_t button_bits[] = {6, 5, 4, 3};
-    
+
     for (int i = 0; i < 4; i++)
     {
-        uint8_t bit_mask = (1 << button_bits[i]);
+        uint8_t bit_mask = (1u << button_bits[i]);
         bool is_pressed = !(initial_state & bit_mask);
         btn_state[i] = is_pressed ? BTN_STATE_PRESSED : BTN_STATE_RELEASED;
     }
-    
-    // Start periodic polling
-    add_alarm_in_ms(50, button_poll_callback, NULL, false);
-    
-    printf("[BUTTONS] I2C button polling started\n");
+
+    // NOTE: No alarm is started here. Call buttons_poll() from your main loop.
+    printf("[BUTTONS] Init done. Call buttons_poll() from main loop.\n");
 }
 
 void buttons_set_callback(button_callback_t callback)

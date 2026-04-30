@@ -373,7 +373,7 @@
                 "USBD_MAX_POWER_MA=250",
                 "LV_CONF_INCLUDE_SIMPLE",
                 "PICO_STDIO_UART=1",
-                "PICO_STDIO_USB=0",
+                "PICO_STDIO_USB=1",
                 "F_CPU=150000000L",
                 "PICO_RP2350=1",
                 "PICO_RISCV=0",

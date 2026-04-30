@@ -22,6 +22,7 @@ typedef enum
 typedef void (*button_callback_t)(Button btn, ButtonState state);
 
 void buttons_init(void);
+void buttons_poll(void);           // call from main loop every ~50 ms
 void buttons_set_callback(button_callback_t callback);
 ButtonState button_get_state(Button btn);
 
